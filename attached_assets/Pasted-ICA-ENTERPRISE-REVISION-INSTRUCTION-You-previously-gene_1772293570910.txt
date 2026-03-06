@@ -1,0 +1,302 @@
+ICA ENTERPRISE REVISION INSTRUCTION
+
+You previously generated the ICA SaaS application.
+
+Now apply the following STRICT ENTERPRISE CORRECTIONS AND ENHANCEMENTS.
+
+This is not optional polishing.
+This is product correction before deployment.
+
+🔵 BRANDING (MANDATORY)
+
+Use official branding everywhere:
+
+App Name:
+ICA
+
+Tagline (must appear on login & dashboard):
+Innovation, Consulting & Automation
+
+Support Number (must appear in footer & login page):
+Support: +91 9967969850
+
+Use the provided ICA logo.
+Apply consistent color theme based on logo.
+Use professional enterprise UI styling (clean, minimal, structured).
+
+🔐 AUTHENTICATION FIXES
+
+Login currently requires clicking "Sign In" twice.
+
+Fix this immediately.
+
+Login must work with a single click.
+
+Remove any duplicate submit handler.
+
+Add Sign Up option:
+
+New user can register with:
+
+Name
+
+Email
+
+Password
+
+Agency Code
+
+New users must have status: PENDING_APPROVAL
+
+They cannot login until approved by:
+
+MASTER_ADMIN or
+
+Their AGENCY_ADMIN
+
+MASTER_ADMIN capabilities:
+
+Change own password
+
+Change any user's password
+
+View all users across all agencies
+
+View all agencies
+
+AGENCY_ADMIN capabilities:
+
+Change own password
+
+Change passwords of:
+
+Team Leaders
+
+Tele Callers
+
+Approve pending users of their agency
+
+TEAM_LEADER capabilities:
+
+Change own password
+
+Change passwords of Tele Callers under them
+
+All password updates must:
+
+Hash using bcrypt
+
+Require authentication
+
+Log password change action
+
+🧠 AI PROCEEDING MODULE (CORE FEATURE — FIX COMPLETELY)
+
+Rename everywhere:
+“AI Intelligence” → AI Proceeding
+
+This is ICA’s CORE FEATURE.
+It must be powerful and correctly implemented.
+
+Currently:
+❌ No audio upload option
+❌ No transcription
+❌ No structured output
+
+Fix completely.
+
+Add:
+
+AI Proceeding Flow:
+
+Upload audio file (.mp3, .wav)
+
+Transcribe audio (Whisper service placeholder)
+
+Extract structured data (GPT placeholder)
+
+Store structured output in DB
+
+Display clean UI view
+
+Structured Output Format:
+
+{
+summary: "",
+targets: [],
+achievements: [],
+responsiblePersons: [],
+kpis: [],
+deadlines: [],
+riskPoints: []
+}
+
+Make UI visually structured:
+
+Summary section
+
+Targets section
+
+KPIs section
+
+Responsible persons section
+
+Achievements section
+
+Risk section
+
+This must look professional and readable.
+
+Access:
+AGENCY_ADMIN (PRO and ENTERPRISE only)
+
+Protect with:
+authMiddleware
+roleMiddleware
+checkPlan("PRO")
+
+📊 LEAD MANAGEMENT FIXES
+
+After assigning leads:
+
+Status is not updating.
+
+Fix real-time refresh issue.
+
+After assignment:
+
+Refetch leads.
+
+Update state properly.
+
+No stale data.
+
+TEAM_LEADER:
+
+Must upload multiple leads via Excel.
+
+Support CSV / XLSX.
+
+Provide downloadable sample template.
+
+Template columns:
+name, phone
+
+Add:
+
+Clear upload success report:
+
+Total rows
+
+Inserted
+
+Duplicates
+
+Invalid rows
+
+Ensure compound index:
+{ agencyCode: 1, phone: 1 } unique
+
+📈 REPORTING SYSTEM
+
+AGENCY_ADMIN must have:
+
+Exportable reports:
+
+Lead summary
+
+Telecaller performance
+
+Conversion report
+
+Export format:
+
+Excel (.xlsx)
+
+Add:
+Download button
+Generate Excel using proper library
+
+🔁 PASSWORD MANAGEMENT SYSTEM
+
+Create centralized route:
+
+PATCH /api/users/change-password
+PATCH /api/users/admin-reset-password
+
+Enforce:
+Role-based permissions
+
+Log:
+Who changed whose password
+Timestamp
+
+🎨 UI CORRECTIONS
+
+Apply ICA color theme
+
+Sidebar must be clean and structured
+
+Footer must show:
+ICA – Innovation, Consulting & Automation
+Support: +91 9967969850
+
+Remove broken links
+
+Remove unused menu items
+
+Ensure mobile responsiveness
+
+⚙️ PERFORMANCE & SCALABILITY CHECK
+
+Fix any unoptimized queries
+
+Use pagination for large lists
+
+Use lean() where needed
+
+Ensure indexes exist
+
+Ensure no blocking synchronous operations
+
+📘 README UPDATE REQUIRED
+
+Update README to include:
+
+Password management system
+
+User approval workflow
+
+AI Proceeding module explanation
+
+Excel report generation
+
+Bulk upload system
+
+How to extend AI module
+
+Deployment checklist
+
+Scaling checklist
+
+Production hardening steps
+
+🔥 IMPORTANT
+
+Do NOT remove:
+
+Multi-tenant isolation
+
+Subscription enforcement
+
+Plan middleware
+
+JWT protection
+
+This is refinement, not rebuild.
+
+Apply all corrections.
+Regenerate updated files only.
+Maintain enterprise structure.
+
+END.

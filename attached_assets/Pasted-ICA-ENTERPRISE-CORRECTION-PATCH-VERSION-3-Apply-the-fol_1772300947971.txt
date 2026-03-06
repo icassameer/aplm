@@ -1,0 +1,285 @@
+ICA ENTERPRISE CORRECTION PATCH – VERSION 3
+
+Apply the following critical backend & architecture corrections.
+
+This is production debugging.
+Do NOT simplify.
+Do NOT remove multi-tenant enforcement.
+Fix properly at controller + query level.
+
+🔐 ROLE & USER VISIBILITY FIXES
+1️⃣ AGENCY_ADMIN USER LIST BUG
+
+Currently:
+Agency Admin sees only his own record.
+
+Correct behavior:
+AGENCY_ADMIN must see:
+
+All users belonging to his agency only.
+
+Filter by agencyCode from token.
+
+Fix controller query:
+
+User.find({ agencyCode: req.user.agencyCode })
+
+Do NOT restrict by userId.
+Must restrict only by agencyCode.
+
+2️⃣ MASTER_ADMIN USER VIEW
+
+MASTER_ADMIN must:
+
+See all users across all agencies
+
+Filter users by agency in UI dropdown
+
+Add:
+GET /api/users?agency=agencyCode
+
+If no filter → show all.
+
+3️⃣ TEAM_LEADER USER VIEW BUG
+
+Currently:
+Team Leader sees all users.
+
+Correct behavior:
+TEAM_LEADER must see:
+
+Only TELE_CALLERS
+
+Under his agency
+
+Optionally under his team
+
+Fix query:
+User.find({
+agencyCode: req.user.agencyCode,
+role: "TELE_CALLER"
+})
+
+Never allow cross-agency data.
+
+📞 TELE CALLER LEAD VISIBILITY BUG
+
+Currently:
+Tele Caller sees all leads.
+
+Fix strictly at backend:
+
+Lead.find({
+agencyCode: req.user.agencyCode,
+assigned_to: req.user.id
+})
+
+Must NOT:
+Return unassigned leads.
+Return leads assigned to others.
+
+Fix update error:
+Ensure update route validates:
+
+Lead belongs to agency
+
+Lead assigned_to = req.user.id
+
+Otherwise reject.
+
+📂 LEAD SESSION UPDATE OPTION
+
+In lead listing screen:
+Remove "Update" button if role ≠ TELE_CALLER.
+
+Assignment feature:
+Only TEAM_LEADER can assign.
+
+AGENCY_ADMIN must not see assign option.
+
+🗑 DELETE OPTIONS REQUIRED
+
+Add:
+
+Delete Lead:
+
+Route:
+DELETE /api/leads/:id
+
+Permission:
+TEAM_LEADER only
+Within same agency only
+
+Delete Agency:
+
+MASTER_ADMIN only
+Route:
+DELETE /api/agencies/:id
+
+Must:
+
+Cascade delete related users
+
+Cascade delete leads
+
+Cascade delete services
+
+Or soft delete (recommended: isDeleted flag)
+
+📊 TEAM LEADER DASHBOARD IMPROVEMENT
+
+Add Telecaller Ranking Section:
+
+Sort telecallers by:
+Performance Score (descending)
+
+Display:
+Rank
+Name
+Score
+Conversion %
+Follow-ups completed
+
+Add leaderboard style card.
+
+🧠 AI PROCEEDING – CRITICAL FIX
+
+Current issue:
+Audio transcription showing old/static data.
+
+This means:
+You are using placeholder or cached dummy data.
+
+Fix completely.
+
+Use Reputed Transcription Service
+
+Integrate:
+OpenAI Whisper API (latest official API)
+
+Steps:
+
+Accept audio upload (.mp3, .wav)
+
+Store temporarily
+
+Send to Whisper API
+
+Return exact transcript
+
+Do NOT reuse old transcript
+
+Clear previous transcript before new processing
+
+Ensure:
+No static mock text.
+No hardcoded response.
+
+After transcription:
+
+Call GPT structured extraction with actual transcript.
+
+Ensure:
+Transcript passed dynamically.
+No dummy JSON.
+
+🧹 CLEAR OLD CACHE ISSUE
+
+Ensure:
+Each AI Proceeding request creates new record.
+No global variable reuse.
+No static transcript variable.
+
+Use:
+async/await properly.
+Return fresh data.
+
+📂 SERVICE MANAGEMENT CHECK
+
+Ensure:
+Service stored in Lead model.
+
+When assigning:
+TEAM_LEADER must select service.
+Service must belong to agency.
+
+Validate before saving.
+
+📈 USER LIST – AGENCYWISE VIEW (MASTER_ADMIN)
+
+Add filter UI:
+Dropdown → select agency
+
+Call:
+GET /api/users?agency=agencyCode
+
+Default:
+All users.
+
+🛑 ERROR WHILE UPDATING LEAD
+
+Fix possible causes:
+
+Validate lead exists
+
+Validate agency match
+
+Validate role permission
+
+Validate assigned_to match for TELE_CALLER
+
+Ensure correct use of findOneAndUpdate
+
+Use:
+
+await Lead.findOneAndUpdate(
+{
+_id: req.params.id,
+agencyCode: req.user.agencyCode
+},
+updateData,
+{ new: true }
+)
+
+⚙ PERFORMANCE ENFORCEMENT
+
+Ensure:
+
+Index on assigned_to
+
+Index on agencyCode
+
+Index on status
+
+Use lean() for list endpoints.
+
+📘 README UPDATE
+
+Add:
+
+AI transcription architecture
+
+Data isolation enforcement
+
+Role-based query enforcement
+
+Delete policy (soft vs hard delete)
+
+Telecaller visibility rules
+
+Agency cascade delete strategy
+
+🔥 IMPORTANT
+
+Do NOT:
+Remove subscription system.
+Remove plan middleware.
+Remove multi-tenant isolation.
+
+This is a correction pass, not a rebuild.
+
+Apply changes cleanly.
+
+Return only updated files.
+
+END OF PATCH.

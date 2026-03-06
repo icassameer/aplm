@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+.npm
+
+# Build output
+dist/
+build/
+
+# Environment — NEVER commit these
+.env
+.env.local
+.env.production
+.env.staging
+
+# Uploads & temp files
+/tmp/uploads/
+*.sql
+*.zip
+*.tar.gz
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Replit specific (not needed in production)
+.replit
+replit.nix
+.upm/
+.config/

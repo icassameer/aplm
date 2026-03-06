@@ -1,0 +1,353 @@
+Role Middleware
+
+Plan Middleware
+
+Centralized Error Handler
+
+Rate Limiting (express-rate-limit)
+
+Helmet for security headers
+
+MongoDB Indexing (optimized for large datasets)
+
+Environment-based DB config (development / production)
+
+Proper logging (morgan or similar)
+
+Frontend:
+
+React (Vite)
+
+Axios with JWT interceptor
+
+Role-based routing
+
+ProtectedLayout architecture
+
+Sidebar navigation
+
+Responsive enterprise UI
+
+Recharts for analytics
+
+Clean enterprise dashboard layout
+
+Footer containing:
+ICA branding
+Support: +91 9967969850
+
+ARCHITECTURE REQUIREMENTS (NON-NEGOTIABLE)
+
+MULTI-TENANCY:
+
+Every document must include agencyCode
+
+Middleware must automatically filter queries by agencyCode
+
+No cross-agency data access allowed
+
+Designed for 10,000+ leads per agency
+
+Lean queries used where appropriate
+
+DATABASE OPTIMIZATION:
+Create indexes for:
+
+agencyCode
+
+status
+
+assigned_to
+
+follow_up_date
+
+createdAt
+
+updatedAt
+
+Compound unique index:
+{ agencyCode: 1, phone: 1 }
+
+Use pagination for all list endpoints.
+
+ROLE STRUCTURE (STRICT HIERARCHY)
+
+MASTER_ADMIN:
+
+Create agencies
+
+Auto-generate agencyCode
+
+Assign plan (BASIC / PRO / ENTERPRISE)
+
+Set leadLimit
+
+Set userLimit
+
+Activate / deactivate agency
+
+View global dashboard
+
+Cannot manage leads directly
+
+AGENCY_ADMIN:
+
+Create TEAM_LEADER
+
+Create TELE_CALLER
+
+Manage users
+
+View agency-wide dashboard
+
+Access AI Proceeding Intelligence (PRO+ only)
+
+TEAM_LEADER:
+
+Add leads
+
+Bulk upload leads (CSV/XLSX)
+
+Assign leads to telecallers
+
+View team dashboard
+
+View telecaller performance
+
+TELE_CALLER:
+
+View assigned leads only
+
+Update status:
+CONVERTED
+FOLLOW_UP (date mandatory)
+NOT_INTERESTED
+
+Add remarks
+
+View personal KPI dashboard
+
+SUBSCRIPTION SYSTEM (ENTERPRISE ENFORCEMENT)
+
+Agency Model must include:
+
+name
+
+agencyCode
+
+plan: BASIC | PRO | ENTERPRISE
+
+isActive: boolean
+
+leadLimit: number
+
+userLimit: number
+
+planAssignedAt: Date
+
+ENFORCEMENT RULES:
+
+Block login if isActive = false
+
+Block lead creation if leadLimit exceeded
+
+Block user creation if userLimit exceeded
+
+BASIC → No AI access
+
+PRO → AI access enabled
+
+ENTERPRISE → AI + future custom modules
+
+Create middleware:
+
+checkPlan(requiredPlan)
+
+Apply:
+AI routes → checkPlan("PRO")
+
+AI PROCEEDING INTELLIGENCE MODULE
+
+Feature Name:
+AI Meeting Intelligence
+
+Access:
+AGENCY_ADMIN (PRO & ENTERPRISE)
+
+Flow:
+
+Upload audio file
+
+Transcribe audio (Whisper placeholder service)
+
+Extract structured insights (GPT placeholder service)
+
+Store structured output in DB
+
+Display in dashboard
+
+Structured Output Format:
+
+{
+summary: "",
+targets: [],
+achievements: [],
+responsiblePersons: [],
+kpis: [],
+deadlines: [],
+riskPoints: []
+}
+
+Meeting Model Fields:
+
+agencyCode
+
+transcript
+
+summary
+
+targets
+
+achievements
+
+responsiblePersons
+
+kpis
+
+deadlines
+
+createdBy
+
+createdAt
+
+All AI routes must require:
+authMiddleware
+roleMiddleware
+checkPlan("PRO")
+
+PERFORMANCE ENGINE
+
+Telecaller Score Formula:
+
+Score =
+(Conversion Rate × 40%)
+
+(Follow-Up Discipline × 30%)
+
+(Activity Consistency × 20%)
+
+(Overdue Penalty × 10%)
+
+Create endpoint:
+
+GET /api/performance/telecaller
+
+Include ranking logic.
+
+SECURITY REQUIREMENTS
+
+JWT required for all protected routes
+
+Role middleware
+
+Plan middleware
+
+Rate limiting
+
+Helmet security headers
+
+Bcrypt password hashing
+
+Audit logs for lead status changes
+
+Centralized error handler
+
+Standardized response format:
+
+{
+success: boolean,
+message: string,
+data: object
+}
+
+API STANDARDIZATION
+
+All business routes must use:
+/api/* prefix
+
+No nested route declarations.
+Proper middleware export discipline.
+
+FOLDER STRUCTURE
+
+backend/
+controllers/
+models/
+routes/
+middlewares/
+services/
+utils/
+config/
+server.js
+
+frontend/
+src/
+pages/
+components/
+layouts/
+services/
+App.jsx
+main.jsx
+
+docs/
+MASTER_BLUEPRINT.md
+VERSION_LOG.md
+ROADMAP.md
+
+README REQUIREMENTS (CRITICAL)
+
+Generate a detailed README.md including:
+
+Project Overview
+
+ICA Branding Guidelines
+
+Role Hierarchy Explanation
+
+Subscription Enforcement Architecture
+
+AI Module Architecture
+
+Performance Engine Explanation
+
+Dev vs Prod Environment Setup
+
+Environment Variables
+
+How to run locally
+
+How to deploy to VPS
+
+Scaling strategy (handling high traffic)
+
+MongoDB indexing explanation
+
+Backup strategy
+
+Security best practices
+
+How to extend plans
+
+Maintenance guidelines
+
+Logging & monitoring recommendations
+
+Future expansion guidance
+
+Build this like a real SaaS company product.
+
+Do not simplify.
+Do not generate tutorial-level code.
+Generate structured, production-ready architecture.
+
+END OF INSTRUCTION.
