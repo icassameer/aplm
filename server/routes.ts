@@ -1179,6 +1179,7 @@ Return ONLY valid JSON, no markdown.`
         clientMentions: aiInsights.clientMentions || [],
         keyFigures: aiInsights.keyFigures || [],
         sentiment: aiInsights.sentiment || "Neutral",
+        language: aiInsights.language || "English",
         createdBy: req.user!.id,
       });
 

@@ -8,7 +8,7 @@ echo "🖥️  ICA CRM VPS Setup Starting..."
 
 # ─── System updates ───────────────────────────────────────────────────────────
 apt-get update && apt-get upgrade -y
-apt-get install -y curl git unzip ufw nginx certbot python3-certbot-nginx
+apt-get install -y curl git unzip ufw nginx certbot python3-certbot-nginx ffmpeg
 
 # ─── Node.js 20 ───────────────────────────────────────────────────────────────
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -

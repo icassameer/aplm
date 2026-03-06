@@ -238,14 +238,19 @@ export async function textToSpeechStream(
  */
 export async function speechToText(
   audioBuffer: Buffer,
-  format: "wav" | "mp3" | "webm" = "wav"
+  format: "wav" | "mp3" | "webm" = "wav",
+  language?: string  // Optional language hint for better accuracy (e.g. "hi" for Hindi, "en" for English)
 ): Promise<string> {
   const file = await toFile(audioBuffer, `audio.${format}`);
   const response = await openai.audio.transcriptions.create({
     file,
     model: "whisper-1",
-  });
-  return response.text;
+    language: language,           // Hint improves accuracy for non-English audio
+    response_format: "verbose_json", // Get language detection info back
+    timestamp_granularities: ["segment"], // Better segmentation
+  } as any);
+  // verbose_json returns object with .text property
+  return (response as any).text || response as unknown as string;
 }
 
 /**

@@ -365,6 +365,11 @@ export default function MeetingsPage() {
                           {meeting.sentiment}
                         </Badge>
                       )}
+                      {meeting.language && meeting.language !== "English" && (
+                        <Badge className="text-[10px] bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                          🌐 {meeting.language}
+                        </Badge>
+                      )}
                       <Badge variant="secondary" className="text-[10px]">
                         <Calendar className="w-3 h-3 mr-1" />
                         {new Date(meeting.createdAt).toLocaleDateString()}

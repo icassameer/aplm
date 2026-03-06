@@ -102,6 +102,7 @@ export const meetings = pgTable("meetings", {
   clientMentions: text("client_mentions").array(),
   keyFigures: text("key_figures").array(),
   sentiment: text("sentiment"),
+  language: text("language"),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [

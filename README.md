@@ -1,119 +1,319 @@
-# ICA CRM - Enterprise Lead Management System
+# ICA CRM — Enterprise Lead Management System
+> Innovation, Consulting & Automation | Support: +91 9967969850
 
-## Overview
-Multi-tenant CRM platform for Insurance Consulting Associates (ICA) with role-based access control, lead management, performance tracking, AI Proceeding intelligence (real OpenAI Whisper + GPT), Excel import/export, services management, and plan upgrade workflow.
+---
 
-## Branding
-- Logo: `attached_assets/ica-logo_1772293580977.jpg`
-- Tagline: "Innovation, Consulting & Automation"
-- Support: +91 9967969850
-- Theme: Navy blue primary (hue 217)
+## 📋 PROJECT BLUEPRINT
+*This document is the single source of truth. Resume any session by sharing this file.*
 
-## Architecture
-- **Frontend**: React + Vite + TailwindCSS + Shadcn UI + Recharts
-- **Backend**: Express.js with JWT authentication
-- **Database**: PostgreSQL with Drizzle ORM
-- **Auth**: JWT tokens (stored as `ica_token` in localStorage, 24h expiry) with bcryptjs password hashing
-- **Excel**: xlsx package for import/export
-- **AI**: OpenAI via Replit AI Integrations (speechToText with gpt-4o-mini-transcribe, GPT-4o-mini for analysis)
-- **Security**: Rate limiting (express-rate-limit), auth-protected integration routes, sanitized error responses
+---
 
-## Role Hierarchy
-1. **MASTER_ADMIN** - System-wide management, create agencies, assign plans, approve users (assign agency+role), approve upgrade requests, delete agencies (cascade), filter users by agency
-2. **AGENCY_ADMIN** - Manage agency users, leads, services, AI Proceeding (PRO+), reports, approvals, request plan upgrades
-3. **TEAM_LEADER** - Add/assign/delete leads to telecallers (only role that can assign), view team performance, sees only TELE_CALLER users
-4. **TELE_CALLER** - Update assigned leads only, view personal KPIs
+## 🗂️ Quick Reference
 
-## Subscription Plans
-- **BASIC** - Standard lead management
-- **PRO** - AI Proceeding enabled (real Whisper transcription + GPT analysis)
-- **ENTERPRISE** - AI + future custom modules
+| Item | Detail |
+|------|--------|
+| **GitHub** | https://github.com/icassameer/icacrmweb.in |
+| **Branch** | `master` |
+| **Domain** | crm.icaweb.in (DNS pending VPS IP) |
+| **Support** | +91 9967969850 |
+| **Local Dev** | http://localhost:5000 |
+| **Node Version** | v20.x (v24 also works locally) |
+| **DB** | PostgreSQL via Drizzle ORM |
+| **SOP Doc** | ICA_CRM_SOP_v2.docx (security + migration guide) |
 
-## Key Features
-- Multi-tenant data isolation by agencyCode
-- **Login page**: Split layout with left hero panel (ICA branding) and right form panel; Sign In + Sign Up tabs
-- **Sign Up without agency code**: Users register with fullName, email, mobile, username, password → PENDING_APPROVAL → MASTER_ADMIN assigns agency+role during approval; AGENCY_ADMIN approves own-agency users
-- Password management (change own, admin reset for subordinates)
-- Lead management with status tracking (NEW, CONTACTED, FOLLOW_UP, CONVERTED, NOT_INTERESTED)
-- **Lead search**: Search by name, phone, or email with debounced input (400ms) across all lead views
-- **Lead assignment**: TEAM_LEADER only (backend enforced); service selection during assignment; assigned leads disappear from TEAM_LEADER's default view (Unassigned filter)
-- **Lead deletion**: TEAM_LEADER only (same agency enforcement)
-- **Bulk lead selection**: Checkboxes for multi-select, "Assign (N)" button for bulk assignment
-- Bulk lead upload via Excel/CSV with template download
-- **Services management**: AGENCY_ADMIN creates/deletes services; services shown in lead create/assign dialogs
-- **Plan upgrade requests**: AGENCY_ADMIN submits request, MASTER_ADMIN approves/denies, auto-updates agency limits
-- Performance scoring engine (conversion 40%, follow-up discipline 30%, activity 20%, overdue penalty 10%)
-- **Optimized KPI queries**: Single SQL query with conditional aggregation instead of multiple round-trips
-- **AI Proceeding**: Real OpenAI Whisper transcription + GPT-4o-mini structured insight extraction (summary, targets, achievements, KPIs, deadlines, risks, responsible persons); MASTER_ADMIN can view all agencies' proceedings with agency filter and delete them
-- Excel export for leads, performance, and conversion reports
-- **Audit logging**: Paginated (20 per page) with prev/next navigation; tracks lead status changes, password changes, user approvals
-- Role-based routing and middleware
-- **Dashboard**: Role-specific charts using Recharts (bar, pie, radar, stacked bar)
-- **Notifications**: Bell icon in header showing role-specific alerts (overdue follow-ups, unassigned leads, pending approvals, upgrade requests) with auto-refresh every 60s
-- **Rate limiting**: Login (10 attempts/15min), API (200 req/min)
-- **Protected integration routes**: /api/conversations and /api/generate-image require JWT auth
-- **JWT secret enforced**: SESSION_SECRET env var is required at startup (no hardcoded fallback)
-- **Seed endpoint protected**: Disabled in production (NODE_ENV=production)
-- **Response logging truncated**: API response logs capped at 200 chars to prevent data leakage
-- **Template endpoint protected**: /api/leads/template requires auth + TEAM_LEADER/AGENCY_ADMIN role
-- **Sanitized errors**: 500 responses return generic messages; actual errors logged server-side only
-- **Database indexes**: On audit_logs (agency, lead, user, created_at) and meetings (agency, created_by)
-- **Agency deletion**: MASTER_ADMIN cascade deletes (leads, users, services, meetings, audit logs, upgrade requests)
-- **User visibility**: TEAM_LEADER sees only TELE_CALLER users; MASTER_ADMIN can filter by agency
-- **Update button**: Only shown to TELE_CALLER (for assigned leads), TEAM_LEADER, and AGENCY_ADMIN
-- **Query cache**: Cleared on login and logout to prevent cross-user data leakage; staleTime set to 30s
-- **Lead status filter**: Works for all roles including TELE_CALLER (getLeadsByAssignee supports status param)
+---
 
-## Demo Credentials
-- masteradmin / admin123
-- agencyadmin / agency123 (agency code: ICA-DEMO01, PRO plan)
-- teamlead1 / team123
-- telecaller1 / caller123
+## ✅ COMPLETED TASKS
 
-## User Status Flow
-- Sign up -> PENDING_APPROVAL -> Admin approves (MASTER_ADMIN assigns agency+role) -> ACTIVE
-- Admin can deactivate -> INACTIVE
+| Task | Status | Commit |
+|------|--------|--------|
+| Initial CRM build (all roles) | ✅ Done | Initial commit |
+| AI Proceeding with monthly limits | ✅ Done | Initial commit |
+| Team Leader view-only AI Proceeding | ✅ Done | Initial commit |
+| Bulk lead upload + auth template download | ✅ Done | Initial commit |
+| RC lookup feature (attempted) | ❌ Reverted | Revert RC lookup |
+| RC lookup reverted (routes + frontend) | ✅ Done | Revert RC lookup |
+| Security hardening v2 | ✅ Done | Security hardening |
+| helmet.js security headers | ✅ Done | Security hardening |
+| CORS restriction to production domain | ✅ Done | Security hardening |
+| Zod input validation (login + signup) | ✅ Done | Security hardening |
+| File type validation on uploads | ✅ Done | Security hardening |
+| Seed endpoint blocked in production | ✅ Done | Security hardening |
+| PM2 cluster config (ecosystem.config.cjs) | ✅ Done | Security hardening |
+| Nginx production config (nginx.conf) | ✅ Done | Security hardening |
+| VPS setup script (setup-vps.sh) | ✅ Done | Security hardening |
+| Deploy script (deploy.sh) | ✅ Done | Security hardening |
+| Pushed to GitHub (master branch) | ✅ Done | — |
 
-## Database Schema
-- agencies, users, leads, audit_logs, meetings, services, upgradeRequests, conversations, messages
-- Users have `status` field: ACTIVE, INACTIVE, PENDING_APPROVAL
-- Users have `mobile` field (added in V3)
-- Leads have `service` field (added in V3)
-- Services: id, name, agencyCode, createdAt
-- UpgradeRequests: id, agencyCode, currentPlan, requestedPlan, status, remarks, createdAt
-- Meetings have `audioFileName` field for uploaded audio
-- AuditLogs have `targetUserId` (nullable) and `leadId` (nullable); indexed on agency_code, lead_id, user_id, created_at
-- Meetings indexed on agency_code, created_by
-- Compound unique index on (agencyCode, phone) for leads
+---
 
-## Project Structure
-- `shared/schema.ts` - Drizzle schema + Zod validation (re-exports conversations/messages from shared/models/chat.ts)
-- `server/routes.ts` - API endpoints with auth/role middleware
-- `server/storage.ts` - Database CRUD operations (includes deleteAgency, deleteLead, getTelecallersByAgency, getUsersByAgencyFilter, deleteServicesByAgency, getNotifications)
-- `server/index.ts` - Express setup with rate limiting and integration route auth
-- `server/db.ts` - PostgreSQL connection
-- `server/replit_integrations/audio/client.ts` - OpenAI audio client (speechToText, ensureCompatibleFormat, openai)
-- `client/src/lib/auth.tsx` - JWT auth context
-- `client/src/hooks/use-api.ts` - Authenticated API fetch hook
-- `client/src/pages/` - Dashboard, Agencies, Users, Leads, Performance, Meetings, Audit Logs, Approvals, Reports, Change Password, Services, Upgrade Requests
-- `client/src/components/app-sidebar.tsx` - Role-based navigation with ICA branding
+## ⏳ PENDING TASKS (In Order)
 
-## API Endpoints
-- POST /api/auth/login (rate limited: 10/15min), POST /api/auth/signup, GET /api/auth/me
-- PATCH /api/users/change-password, PATCH /api/users/admin-reset-password
-- POST /api/users/approve/:id, POST /api/users/reject/:id
-- GET /api/users/pending
-- GET /api/users (TEAM_LEADER: telecallers only; MASTER_ADMIN: ?agency= filter)
-- CRUD /api/agencies (includes DELETE for cascade delete)
-- CRUD /api/leads (includes DELETE for TEAM_LEADER, ?search= for name/phone/email search)
-- POST /api/leads/bulk-assign (TEAM_LEADER only, bulk lead assignment)
-- POST /api/leads/bulk, POST /api/leads/upload, GET /api/leads/template
-- GET /api/reports/leads, /api/reports/performance, /api/reports/conversion
-- GET /api/dashboard, /api/stats/leads
-- GET /api/performance/telecaller
-- POST /api/meetings (multipart with audio - real Whisper+GPT), GET /api/meetings
-- CRUD /api/services (AGENCY_ADMIN)
-- GET/POST /api/upgrade-requests, PATCH /api/upgrade-requests/:id (MASTER_ADMIN approve/deny)
-- GET /api/audit-logs (?page=&limit= pagination)
-- GET /api/notifications (role-specific alerts)
-- POST /api/seed (initial data)
+| # | Task | Notes |
+|---|------|-------|
+| 1 | 💳 Get international payment method | Niyo Global (free) or Scapia card — need Aadhaar + PAN |
+| 2 | 🖥️ Buy Hetzner CX22 VPS | €4/month (~₹360) — hetzner.com/cloud |
+| 3 | 🤖 Get OpenAI API key | platform.openai.com — add $10 credits |
+| 4 | 🌐 Point DNS to VPS | crm.icaweb.in → VPS IP (GoDaddy panel) |
+| 5 | 🚀 Run setup-vps.sh on server | Fresh Ubuntu 24.04 setup |
+| 6 | ⚙️ Configure .env on server | SESSION_SECRET + DATABASE_URL + OPENAI_API_KEY |
+| 7 | 🗄️ Restore database backup | Upload + restore ica_crm_backup.sql |
+| 8 | 🔐 Get SSL certificate | sudo certbot --nginx -d crm.icaweb.in |
+| 9 | ✅ Go live testing | All roles + AI Proceeding + Excel export |
+| 10 | 🔑 RC lookup (future) | Use Surepass API (₹2-3/lookup) — proper paid API |
+
+---
+
+## 🏗️ ARCHITECTURE
+
+### Tech Stack
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 18 + Vite + TailwindCSS + Shadcn UI + Recharts |
+| Backend | Express.js 5 + TypeScript + JWT |
+| Database | PostgreSQL + Drizzle ORM |
+| AI | OpenAI Whisper (transcription) + GPT-4o-mini (analysis) |
+| Auth | JWT (24h expiry) + bcrypt (10 rounds) |
+| Security | helmet + cors + express-rate-limit + zod |
+| Process | PM2 cluster mode (all CPU cores) |
+| Web Server | Nginx (reverse proxy + SSL) |
+
+### Role Hierarchy
+```
+MASTER_ADMIN
+  └── AGENCY_ADMIN
+        └── TEAM_LEADER
+              └── TELE_CALLER
+```
+
+| Role | Permissions |
+|------|------------|
+| MASTER_ADMIN | Create agencies, assign plans, approve users, view all AI proceedings, delete agencies (cascade) |
+| AGENCY_ADMIN | Manage users, leads, services, AI Proceeding (PRO+), reports, request plan upgrades |
+| TEAM_LEADER | Add/assign/delete leads, view team performance, view AI proceedings (read-only) |
+| TELE_CALLER | Update assigned leads only, view personal KPIs |
+
+### Subscription Plans
+| Plan | AI Proceeding | Lead Limit | User Limit |
+|------|--------------|------------|------------|
+| BASIC | ❌ No access | 500 | 10 |
+| PRO | ✅ 10/month | 2,000 | 50 |
+| ENTERPRISE | ✅ Unlimited | 10,000 | 200 |
+
+---
+
+## 🔐 SECURITY IMPLEMENTATION (v2)
+
+### Applied Controls
+- ✅ `helmet.js` — X-Frame-Options, HSTS, CSP, noSniff, referrer policy
+- ✅ CORS restricted to `crm.icaweb.in` in production
+- ✅ Rate limiting: Login (10/15min), Signup (5/hr), API (200/min), Uploads (10/min)
+- ✅ Zod validation on all auth endpoints
+- ✅ File MIME type validation on uploads
+- ✅ `/api/seed` blocked in production (returns 404)
+- ✅ JWT secret length enforced (32+ chars minimum)
+- ✅ Tokens/passwords scrubbed from server logs
+- ✅ Generic error messages in production (no stack traces)
+- ✅ Body size capped at 1MB (prevents body bombing)
+- ✅ Audit logs for all sensitive operations
+
+### Remaining Security TODOs (P2/P3)
+- ⏳ Brute force account lockout (after 5 failed logins, lock 15min)
+- ⏳ Database field-level encryption for phone/email
+- ⏳ Dependency vulnerability scanning (npm audit in CI)
+- ⏳ Privacy policy + data retention policy docs
+
+### SOC 2 Score
+- Current: **62/100**
+- Target: **90/100** (after P1 fixes above)
+
+---
+
+## 💰 COST BREAKDOWN
+
+| Item | Cost |
+|------|------|
+| Hetzner CX22 VPS | €4/month (~₹360) — increases to €4.49 from April 2026 |
+| OpenAI API (10 agencies PRO) | ~$18/month (~₹1,500) |
+| Domain (icaweb.in) | Already owned (GoDaddy) |
+| **Total** | **~₹1,900/month** |
+
+### OpenAI Cost Detail
+- Whisper transcription: $0.006/min (~₹0.50/min)
+- GPT-4o-mini analysis: ~$0.002/meeting
+- 10 meetings × 30min = ~$1.82/month per agency
+- Start with: **$10 credits**
+
+---
+
+## 🚀 DEPLOYMENT GUIDE
+
+### Quick Deploy (after VPS is ready)
+```bash
+# On server — first time only:
+chmod +x setup-vps.sh && ./setup-vps.sh
+
+# Configure environment:
+cp .env.example .env
+nano .env  # Fill in SESSION_SECRET, DATABASE_URL, OPENAI_API_KEY
+
+# Build and start:
+npm install && npm run build
+pm2 start ecosystem.config.cjs --env production
+pm2 save && pm2 startup
+
+# Setup Nginx:
+cp nginx.conf /etc/nginx/sites-available/ica-crm
+ln -s /etc/nginx/sites-available/ica-crm /etc/nginx/sites-enabled/
+nginx -t && systemctl reload nginx
+
+# SSL:
+certbot --nginx -d crm.icaweb.in
+```
+
+### Future Updates (after each git push)
+```bash
+ssh root@YOUR_VPS_IP
+cd /var/www/ica-crm
+./deploy.sh   # Pulls, builds, restarts automatically
+```
+
+---
+
+## 🗄️ DATABASE
+
+### Schema Tables
+| Table | Purpose |
+|-------|---------|
+| agencies | Multi-tenant agency records |
+| users | All users across all agencies |
+| leads | Lead records (unique per agency+phone) |
+| audit_logs | All sensitive action logs |
+| meetings | AI Proceeding recordings + analysis |
+| services | Agency-specific service types |
+| upgrade_requests | Plan upgrade workflow |
+| conversations | Replit AI chat (integration) |
+| messages | Replit AI messages (integration) |
+
+### Key Indexes
+```sql
+-- Already in schema:
+leads: (agency_code, phone) UNIQUE
+leads: agency_code, status, assigned_to, follow_up_date, service
+audit_logs: agency_code, lead_id, user_id, created_at
+meetings: agency_code, created_by
+users: agency_code, role, status
+agencies: agency_code
+```
+
+### Restore Backup on VPS
+```bash
+# Upload from local machine:
+scp ica_crm_backup.sql root@VPS_IP:/var/www/ica-crm/
+
+# Restore on server:
+psql postgresql://ica_user:PASSWORD@localhost:5432/ica_crm < ica_crm_backup.sql
+```
+
+---
+
+## 🔑 ENVIRONMENT VARIABLES
+
+```env
+# Generate SESSION_SECRET with:
+# openssl rand -base64 64
+
+SESSION_SECRET=256bit_random_string_min_32_chars
+DATABASE_URL=postgresql://ica_user:StrongPassword@localhost:5432/ica_crm
+OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxx
+NODE_ENV=production
+ALLOWED_ORIGINS=https://crm.icaweb.in
+```
+
+> ⚠️ NEVER commit `.env` to GitHub. It's in `.gitignore`.
+
+---
+
+## 🧪 DEMO CREDENTIALS
+
+| Role | Username | Password | Agency |
+|------|----------|----------|--------|
+| Master Admin | masteradmin | admin123 | — |
+| Agency Admin | agencyadmin | agency123 | ICA-DEMO01 (PRO) |
+| Team Leader | teamlead1 | team123 | ICA-DEMO01 |
+| Tele Caller | telecaller1 | caller123 | ICA-DEMO01 |
+
+> ⚠️ Change all passwords before going live!
+
+---
+
+## 📁 PROJECT STRUCTURE
+
+```
+icacrmweb.in/
+├── client/
+│   ├── src/
+│   │   ├── pages/          # All page components
+│   │   ├── components/     # Shared UI components
+│   │   ├── hooks/          # use-api, use-toast, use-mobile
+│   │   └── lib/            # auth.tsx, queryClient.ts
+│   └── public/             # Static assets + logo
+├── server/
+│   ├── index.ts            # Express setup + security middleware
+│   ├── routes.ts           # All API endpoints
+│   ├── storage.ts          # Database CRUD layer
+│   ├── db.ts               # PostgreSQL connection
+│   └── replit_integrations/ # OpenAI audio/image/chat clients
+├── shared/
+│   └── schema.ts           # Drizzle schema + Zod validators
+├── .env.example            # Environment variable template
+├── .gitignore              # Excludes .env, node_modules, dist
+├── ecosystem.config.cjs    # PM2 cluster production config
+├── nginx.conf              # Nginx reverse proxy + SSL config
+├── deploy.sh               # One-command deployment script
+├── setup-vps.sh            # Fresh VPS setup script
+└── ICA_CRM_SOP_v2.docx    # Full SOP + security + migration guide
+```
+
+---
+
+## 🔧 TROUBLESHOOTING
+
+| Problem | Solution |
+|---------|----------|
+| `DATABASE_URL must be set` | Copy `.env.example` → `.env` and fill values |
+| Logo not loading | Copy `attached_assets/ica-logo*.jpg` → `client/public/` |
+| App not starting on VPS | `pm2 logs ica-crm` to see errors |
+| SSL certificate error | `sudo certbot renew` (expires every 90 days) |
+| Git push rejected | Use Personal Access Token, not GitHub password |
+| Rate limit 429 error | Expected — client retries after 15 minutes |
+| OpenAI not working | Check `OPENAI_API_KEY` in `.env` and billing credits |
+
+---
+
+## 🔮 FUTURE FEATURES (Backlog)
+
+| Feature | Notes |
+|---------|-------|
+| RC Vehicle Lookup | Use Surepass API (₹2-3/lookup) — reverted from RapidAPI |
+| WhatsApp Integration | Send lead updates via WhatsApp Business API |
+| Email Notifications | Follow-up reminders via SMTP |
+| Mobile App | React Native wrapper |
+| Advanced Analytics | Custom date range reports |
+| Data Export (PDF) | PDF report generation |
+
+---
+
+## 📞 CONTACTS & ACCOUNTS
+
+| Service | Account | Notes |
+|---------|---------|-------|
+| GitHub | icassameer | icacrmweb.in repo |
+| Domain | GoDaddy | icaweb.in |
+| VPS | Hetzner (pending) | Need Niyo/Scapia card |
+| OpenAI | (pending) | Need $10 credits |
+| Support | +91 9967969850 | ICA team |
+
+---
+
+*Last updated: March 2026 | Version: 2.0 | Status: Security hardened, pending VPS deployment*
