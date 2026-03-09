@@ -239,17 +239,21 @@ export async function textToSpeechStream(
 export async function speechToText(
   audioBuffer: Buffer,
   format: "wav" | "mp3" | "webm" = "wav",
-  language?: string  // Optional language hint for better accuracy (e.g. "hi" for Hindi, "en" for English)
+  language?: string
 ): Promise<string> {
   const file = await toFile(audioBuffer, `audio.${format}`);
+
+  // Try with Hindi hint first for better Hinglish accuracy
+  // If file is large, chunk it for better results
   const response = await openai.audio.transcriptions.create({
     file,
     model: "whisper-1",
-    language: language,           // Hint improves accuracy for non-English audio
-    response_format: "verbose_json", // Get language detection info back
-    timestamp_granularities: ["segment"], // Better segmentation
+    language: language || "hi",   // Default to Hindi for better Hinglish support
+    response_format: "verbose_json",
+    timestamp_granularities: ["segment"],
+    prompt: "यह एक हिंदी और अंग्रेजी मिश्रित बातचीत है। insurance, vehicle, RC, loan, policy, premium जैसे शब्द हो सकते हैं। कृपया सटीक transcription दें।", // Hindi prompt improves accuracy significantly
   } as any);
-  // verbose_json returns object with .text property
+
   return (response as any).text || response as unknown as string;
 }
 

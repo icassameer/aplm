@@ -1082,6 +1082,16 @@ export async function registerRoutes(
     }
   });
 
+  // In-memory job store for background processing
+  const processingJobs = new Map<string, { status: string; progress: number; message: string; result?: any; error?: string; createdAt: Date }>();
+
+  // GET /api/meetings/job/:jobId — check background job status
+  app.get("/api/meetings/job/:jobId", authMiddleware, async (req: AuthRequest, res: Response) => {
+    const job = processingJobs.get(req.params.jobId);
+    if (!job) return res.status(404).json({ success: false, message: "Job not found" });
+    res.json({ success: true, ...job });
+  });
+
   app.post("/api/meetings", authMiddleware, roleMiddleware("AGENCY_ADMIN"), upload.single("audio"), async (req: AuthRequest, res: Response) => {
     try {
       const agencyCode = req.user!.agencyCode;
@@ -1112,17 +1122,167 @@ export async function registerRoutes(
       let transcript = req.body.transcript || "";
       const audioFileName = req.file ? req.file.originalname : null;
 
+      // ── Background Processing for Audio Files ────────────────────────────────
       if (req.file) {
-        try {
-          const audioBuffer = fs.readFileSync(req.file.path);
-          const { buffer: compatibleBuffer, format } = await ensureCompatibleFormat(audioBuffer);
-          transcript = await speechToText(compatibleBuffer, format);
-        } catch (err: any) {
-          console.error("Whisper transcription error:", err.message);
-          transcript = transcript || `[Audio transcription failed: ${err.message}]`;
-        } finally {
-          try { fs.unlinkSync(req.file.path); } catch {}
-        }
+        const jobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const filePath = req.file.path;
+        const originalName = req.file.originalname;
+        const userId = req.user!.id;
+
+        // Start background processing
+        processingJobs.set(jobId, {
+          status: "processing",
+          progress: 5,
+          message: "🎵 Audio received, starting transcription...",
+          createdAt: new Date(),
+        });
+
+        // Return job ID immediately so frontend can poll
+        res.json({ success: true, jobId, message: "Processing started in background" });
+
+        // Process in background
+        (async () => {
+          try {
+            // Step 1: Transcription
+            processingJobs.set(jobId, { status: "processing", progress: 15, message: "🎙️ Transcribing audio... (this may take 1-3 minutes for large files)", createdAt: new Date() });
+            const audioBuffer = fs.readFileSync(filePath);
+            const { buffer: compatibleBuffer, format } = await ensureCompatibleFormat(audioBuffer);
+            transcript = await speechToText(compatibleBuffer, format);
+            try { fs.unlinkSync(filePath); } catch {}
+
+            // Step 2: Speaker diarization
+            processingJobs.set(jobId, { status: "processing", progress: 45, message: "👥 Identifying speakers...", createdAt: new Date() });
+            let diarizedTranscript = transcript;
+            try {
+              const diarizeResponse = await openai.chat.completions.create({
+                model: "gpt-4o-mini",
+                messages: [
+                  {
+                    role: "system",
+                    content: `You are an expert at analyzing Hindi/Hinglish/English conversation transcripts and identifying different speakers.
+
+Your task is to split the transcript into labeled speaker turns. Follow these rules:
+1. Identify distinct speakers based on conversation flow, questions vs answers, and tone
+2. Use actual names/titles if clearly mentioned (e.g. "Sir Ji:", "Haji:", "Bhai:") — otherwise use "Speaker 1:", "Speaker 2:", etc.
+3. Each speaker turn on a new line starting with speaker label
+4. Preserve the EXACT original language (Hindi/English/Hinglish) — do NOT translate or modify
+5. Group consecutive sentences from same speaker together
+6. For insurance/business conversations: buyer usually asks questions, seller explains products/prices
+7. If only one speaker, return as "Speaker 1: [full text]"
+
+Return ONLY the formatted transcript. No explanation, no markdown.`
+                  },
+                  { role: "user", content: `Split this transcript by speaker:
+
+${transcript}` }
+                ],
+                temperature: 0.1,
+                max_tokens: 4000,
+              });
+              const diarized = diarizeResponse.choices[0]?.message?.content?.trim();
+              if (diarized && diarized.length > 0) diarizedTranscript = diarized;
+            } catch (err: any) {
+              console.error("Diarization error:", err.message);
+            }
+
+            // Step 3: AI Insights
+            processingJobs.set(jobId, { status: "processing", progress: 65, message: "🧠 Extracting AI insights & KPIs...", createdAt: new Date() });
+            let aiInsights: any = {};
+            try {
+              const gptResponse = await openai.chat.completions.create({
+                model: "gpt-4o-mini",
+                messages: [
+                  {
+                    role: "system",
+                    content: `You are a senior AI analyst for an insurance CRM. Analyze this Hindi/Hinglish/English meeting transcript and extract detailed, accurate insights.
+
+CRITICAL RULES:
+- Extract EXACT numbers, rates, quantities mentioned — do NOT approximate
+- For insurance meetings: capture policy names, premium amounts, coverage details, vehicle details
+- For business meetings: capture order quantities, rates per unit, delivery timelines
+- Names: capture all people mentioned (Sir Ji, Haji, Bhai, or actual names)
+- If something is NOT mentioned, return empty array — do NOT fabricate
+- All values should be in the language they were spoken (Hindi numbers are fine)
+
+Return a JSON object with these exact fields:
+{
+  "summary": "4-6 sentence summary in English covering purpose, key discussions, and outcomes",
+  "targets": ["specific target with numbers/context"],
+  "achievements": ["specific achievement with data"],
+  "responsiblePersons": ["Name/Title - their role or responsibility"],
+  "kpis": ["Metric name - exact value (e.g. Rate - ₹71.50, Quantity - 15 pieces)"],
+  "deadlines": ["Task - deadline/timeline"],
+  "riskPoints": ["specific risk or concern raised"],
+  "actionItems": ["specific action - who is responsible"],
+  "keyDecisions": ["specific decision made"],
+  "nextSteps": ["specific next step agreed upon"],
+  "clientMentions": ["Name/Company - context"],
+  "keyFigures": ["Description - exact value (e.g. Rate per piece - ₹71.50)"],
+  "sentiment": "Positive|Neutral|Concerned|Critical"
+}
+
+Return ONLY valid JSON, no markdown, no explanation.`
+                  },
+                  { role: "user", content: `Meeting Title: ${title}
+
+Transcript (with speakers):
+${diarizedTranscript}` }
+                ],
+                temperature: 0.2,
+                max_tokens: 2500,
+              });
+
+              const raw = gptResponse.choices[0]?.message?.content?.trim() || "{}";
+              const cleaned = raw.replace(/```json|```/g, "").trim();
+              aiInsights = JSON.parse(cleaned);
+            } catch (err: any) {
+              console.error("GPT insights error:", err.message);
+              aiInsights = { summary: "Could not extract insights", sentiment: "Neutral" };
+            }
+
+            // Step 4: Save to DB
+            processingJobs.set(jobId, { status: "processing", progress: 90, message: "💾 Saving results...", createdAt: new Date() });
+
+            // Detect language
+            const hindiCharCount = (diarizedTranscript.match(/[ऀ-ॿ]/g) || []).length;
+            const totalChars = diarizedTranscript.replace(/\s/g, "").length;
+            const language = totalChars > 0 && hindiCharCount / totalChars > 0.15 ? "Hindi/Hinglish" : "English";
+
+            const meeting = await storage.createMeeting({
+              agencyCode,
+              title,
+              audioFileName: originalName,
+              transcript: diarizedTranscript,
+              summary: aiInsights.summary || "",
+              targets: aiInsights.targets || [],
+              achievements: aiInsights.achievements || [],
+              responsiblePersons: aiInsights.responsiblePersons || [],
+              kpis: aiInsights.kpis || [],
+              deadlines: aiInsights.deadlines || [],
+              riskPoints: aiInsights.riskPoints || [],
+              actionItems: aiInsights.actionItems || [],
+              keyDecisions: aiInsights.keyDecisions || [],
+              nextSteps: aiInsights.nextSteps || [],
+              clientMentions: aiInsights.clientMentions || [],
+              keyFigures: aiInsights.keyFigures || [],
+              sentiment: aiInsights.sentiment || "Neutral",
+              language,
+              createdBy: userId,
+            });
+
+            processingJobs.set(jobId, { status: "done", progress: 100, message: "✅ Analysis complete!", result: meeting, createdAt: new Date() });
+
+            // Clean up job after 10 minutes
+            setTimeout(() => processingJobs.delete(jobId), 10 * 60 * 1000);
+
+          } catch (err: any) {
+            console.error("Background job error:", err.message);
+            try { fs.unlinkSync(filePath); } catch {}
+            processingJobs.set(jobId, { status: "error", progress: 0, message: `❌ Processing failed: ${err.message}`, error: err.message, createdAt: new Date() });
+          }
+        })();
+
+        return; // Response already sent
       }
 
       if (!transcript || transcript.trim().length === 0) {

@@ -32,6 +32,7 @@ export default function MeetingsPage() {
   const [transcript, setTranscript] = useState("");
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [creating, setCreating] = useState(false);
+  const [jobProgress, setJobProgress] = useState<{ progress: number; message: string } | null>(null);
   const [agencyFilter, setAgencyFilter] = useState("all");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -86,6 +87,7 @@ export default function MeetingsPage() {
     e.preventDefault();
     if (creating) return;
     setCreating(true);
+    setJobProgress(null);
     try {
       const formData = new FormData();
       formData.append("title", title);
@@ -100,20 +102,57 @@ export default function MeetingsPage() {
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
 
+      // If audio file — poll for background job completion
+      if (audioFile && data.jobId) {
+        setJobProgress({ progress: 10, message: "🎵 Audio uploaded, processing started..." });
+        const jobId = data.jobId;
+
+        // Poll every 3 seconds
+        await new Promise<void>((resolve, reject) => {
+          const interval = setInterval(async () => {
+            try {
+              const jobRes = await fetch(`/api/meetings/job/${jobId}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              const job = await jobRes.json();
+              setJobProgress({ progress: job.progress, message: job.message });
+
+              if (job.status === "done") {
+                clearInterval(interval);
+                resolve();
+              } else if (job.status === "error") {
+                clearInterval(interval);
+                reject(new Error(job.error || "Processing failed"));
+              }
+            } catch (err) {
+              clearInterval(interval);
+              reject(err);
+            }
+          }, 3000);
+
+          // Timeout after 10 minutes
+          setTimeout(() => {
+            clearInterval(interval);
+            reject(new Error("Processing timed out. Please try again."));
+          }, 10 * 60 * 1000);
+        });
+      }
+
       queryClient.invalidateQueries({ queryKey: ["/api/meetings"] });
       queryClient.invalidateQueries({ queryKey: ["/api/meetings/usage"] });
       setOpen(false);
       setTitle("");
       setTranscript("");
       setAudioFile(null);
+      setJobProgress(null);
       if (fileRef.current) fileRef.current.value = "";
-      toast({ title: "AI Proceeding analysis complete" });
+      toast({ title: "✅ AI Proceeding analysis complete!" });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
-      // Refresh usage in case limit was just hit
       queryClient.invalidateQueries({ queryKey: ["/api/meetings/usage"] });
     } finally {
       setCreating(false);
+      setJobProgress(null);
     }
   };
 
@@ -273,11 +312,37 @@ export default function MeetingsPage() {
                         rows={6}
                       />
                     </div>
+                    {/* Progress indicator */}
+                    {creating && jobProgress && (
+                      <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">{jobProgress.message}</span>
+                          <span className="font-medium text-primary">{jobProgress.progress}%</span>
+                        </div>
+                        <div className="w-full bg-muted rounded-full h-2">
+                          <div
+                            className="bg-primary h-2 rounded-full transition-all duration-500"
+                            style={{ width: `${jobProgress.progress}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground text-center">
+                          ⏱️ Large audio files (5-15 min) take 2-4 minutes to process. Please wait...
+                        </p>
+                      </div>
+                    )}
+
+                    {creating && !jobProgress && (
+                      <div className="rounded-lg border bg-muted/30 p-4 text-center">
+                        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                        <p className="text-sm text-muted-foreground">Uploading audio file...</p>
+                      </div>
+                    )}
+
                     <Button type="submit" className="w-full" disabled={creating} data-testid="button-analyze-meeting">
                       {creating ? (
                         <span className="flex items-center gap-2">
                           <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                          Analyzing with AI...
+                          Processing...
                         </span>
                       ) : (
                         <span className="flex items-center gap-2">
