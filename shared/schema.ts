@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, boolean, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, timestamp, uniqueIndex, index, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -132,6 +132,18 @@ export const upgradeRequests = pgTable("upgrade_requests", {
   index("upgrade_requests_status_idx").on(table.status),
 ]);
 
+export const rcRecords = pgTable("rc_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  agencyCode: text("agency_code").notNull(),
+  rcNumber: text("rc_number").notNull(),
+  rcData: jsonb("rc_data").notNull(),
+  lookedUpBy: text("looked_up_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("rc_records_agency_idx").on(table.agencyCode),
+  index("rc_records_rc_idx").on(table.rcNumber),
+]);
+
 export { conversations, messages } from "./models/chat";
 
 export const insertAgencySchema = createInsertSchema(agencies).omit({ id: true, createdAt: true, planAssignedAt: true });
@@ -170,3 +182,6 @@ export type InsertUpgradeRequest = z.infer<typeof insertUpgradeRequestSchema>;
 export type Role = typeof roleEnum[number];
 export type Plan = typeof planEnum[number];
 export type LeadStatus = typeof leadStatusEnum[number];
+export type RcRecord = typeof rcRecords.$inferSelect;
+export const insertRcRecordSchema = createInsertSchema(rcRecords).omit({ id: true, createdAt: true });
+export type InsertRcRecord = z.infer<typeof insertRcRecordSchema>;

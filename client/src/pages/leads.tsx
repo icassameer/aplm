@@ -16,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Phone, Plus, ChevronLeft, ChevronRight, Filter, Search,
   UserCheck, Clock, CheckCircle2, XCircle, AlertCircle,
-  Upload, Download, Briefcase,
+  Upload, Download, Briefcase, MessageCircle,
 } from "lucide-react";
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
@@ -466,6 +466,18 @@ export default function LeadsPage() {
                           </div>
                           <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5 flex-wrap">
                             <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{lead.phone}</span>
+                            <a
+                              href={`https://wa.me/91${lead.phone.replace(/\D/g, "")}?text=${encodeURIComponent(
+                                `Hello ${lead.name},\n\nWe are reaching out regarding your enquiry${lead.service ? ` for *${lead.service}*` : ""}.\n\nWe would love to assist you. Please let us know a convenient time to connect.\n\nRegards,\nICA Team\n+91 9967969850`)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-green-600 hover:text-green-700 font-medium transition-colors bg-green-50 dark:bg-green-950 px-2 py-0.5 rounded-full"
+                              data-testid={`button-whatsapp-${lead.id}`}
+                              title={`Send WhatsApp to ${lead.name}`}
+                            >
+                              <MessageCircle className="w-3 h-3" />
+                              <span>WhatsApp</span>
+                            </a>
                             {lead.email && <span>{lead.email}</span>}
                             {lead.followUpDate && (
                               <span className="flex items-center gap-1">

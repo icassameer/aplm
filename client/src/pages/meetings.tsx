@@ -470,10 +470,40 @@ export default function MeetingsPage() {
 
                     <TabsContent value="transcript">
                       {meeting.transcript ? (
-                        <div className="p-4 rounded-md bg-muted/30 border">
-                          <p className="text-sm whitespace-pre-wrap leading-relaxed font-mono" data-testid={`text-transcript-${meeting.id}`}>
-                            {meeting.transcript}
-                          </p>
+                        <div className="p-4 rounded-md bg-muted/30 border space-y-1">
+                          {/* Render speaker-labeled transcript with color coding */}
+                          {meeting.transcript.split("\n").filter((line: string) => line.trim()).map((line: string, idx: number) => {
+                            const speakerColors = [
+                              "text-blue-700 dark:text-blue-300",
+                              "text-emerald-700 dark:text-emerald-300",
+                              "text-purple-700 dark:text-purple-300",
+                              "text-orange-700 dark:text-orange-300",
+                            ];
+                            // Detect speaker label (e.g. "Speaker 1:", "Sir Ji:", "Haji:")
+                            const speakerMatch = line.match(/^([^:]{1,30}):\s*(.*)/);
+                            if (speakerMatch) {
+                              const speakerLabel = speakerMatch[1].trim();
+                              const dialogue = speakerMatch[2].trim();
+                              // Assign color based on speaker number or name hash
+                              const colorIndex = Math.abs(speakerLabel.split("").reduce((a, c) => a + c.charCodeAt(0), 0)) % speakerColors.length;
+                              return (
+                                <div key={idx} className="flex gap-2 py-1.5 border-b border-muted last:border-0">
+                                  <span className={`text-xs font-bold shrink-0 w-24 pt-0.5 ${speakerColors[colorIndex]}`} data-testid={`speaker-label-${idx}`}>
+                                    {speakerLabel}
+                                  </span>
+                                  <span className="text-sm leading-relaxed flex-1" data-testid={`speaker-text-${idx}`}>
+                                    {dialogue}
+                                  </span>
+                                </div>
+                              );
+                            }
+                            // Plain line (no speaker label)
+                            return (
+                              <p key={idx} className="text-sm leading-relaxed py-1 text-muted-foreground font-mono">
+                                {line}
+                              </p>
+                            );
+                          })}
                         </div>
                       ) : (
                         <div className="p-8 text-center text-muted-foreground">

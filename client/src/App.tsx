@@ -24,6 +24,7 @@ import ApprovalsPage from "@/pages/approvals";
 import ReportsPage from "@/pages/reports";
 import ServicesPage from "@/pages/services";
 import UpgradeRequestsPage from "@/pages/upgrade-requests";
+import RCLookupPage from "@/pages/rc-lookup";
 
 function ProtectedRoute({ component: Component, allowedRoles }: { component: any; allowedRoles?: string[] }) {
   const { user, isLoading } = useAuth();
@@ -186,6 +187,9 @@ function AuthenticatedLayout() {
               </Route>
               <Route path="/change-password">
                 <ProtectedRoute component={ChangePasswordPage} />
+              </Route>
+              <Route path="/rc-lookup">
+                <ProtectedRoute component={RCLookupPage} allowedRoles={["AGENCY_ADMIN", "TEAM_LEADER"]} />
               </Route>
               <Route component={NotFound} />
             </Switch>

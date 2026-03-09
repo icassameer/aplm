@@ -15,7 +15,7 @@ import {
 import {
   LayoutDashboard, Users, Building2, Phone,
   BarChart3, FileText, Brain, LogOut, ChevronDown,
-  KeyRound, UserCheck, Download, Briefcase, ArrowUpCircle,
+  KeyRound, UserCheck, Download, Briefcase, ArrowUpCircle, Car,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -146,6 +146,7 @@ function getNavItems(role: string) {
     items.push({ title: "Plan & Upgrade", url: "/upgrade-requests", icon: ArrowUpCircle });
     items.push({ title: "Reports", url: "/reports", icon: Download });
     items.push({ title: "Audit Logs", url: "/audit-logs", icon: FileText });
+    items.push({ title: "RC Lookup", url: "/rc-lookup", icon: Car });
   }
 
   if (role === "TEAM_LEADER") {
@@ -154,6 +155,7 @@ function getNavItems(role: string) {
     items.push({ title: "Performance", url: "/performance", icon: BarChart3 });
     items.push({ title: "AI Proceeding", url: "/meetings", icon: Brain });
     items.push({ title: "Audit Logs", url: "/audit-logs", icon: FileText });
+    items.push({ title: "RC Lookup", url: "/rc-lookup", icon: Car });
   }
 
   if (role === "TELE_CALLER") {

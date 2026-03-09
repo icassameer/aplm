@@ -53,6 +53,13 @@ const AI_PROCEEDING_LIMITS: Record<string, number> = {
   ENTERPRISE: Infinity, // Unlimited
 };
 
+// RC Lookup monthly limits per plan
+const RC_LOOKUP_LIMITS: Record<string, number> = {
+  BASIC: 0,        // No RC access
+  PRO: 50,         // 50 lookups per month
+  ENTERPRISE: Infinity, // Unlimited
+};
+
 function generateToken(user: User): string {
   return jwt.sign(
     { id: user.id, username: user.username, role: user.role, agencyCode: user.agencyCode },
@@ -1122,6 +1129,48 @@ export async function registerRoutes(
         return res.status(400).json({ success: false, message: "No transcript or audio provided" });
       }
 
+      // ── Speaker Diarization via GPT Smart Split ──────────────────────────────
+      // Uses GPT-4o-mini to identify and label speakers from conversation flow
+      let diarizedTranscript = transcript;
+      try {
+        const diarizeResponse = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content: `You are an expert at analyzing conversation transcripts and identifying different speakers.
+
+Your task is to split the transcript into labeled speaker turns. Follow these rules:
+1. Identify distinct speakers based on conversation flow, topics, questions vs answers, and tone
+2. Label speakers as "Speaker 1:", "Speaker 2:", etc. — or use actual names/titles if clearly mentioned (e.g. "Sir Ji:", "Haji:")
+3. Each speaker turn should be on a new line starting with the speaker label
+4. Preserve the original language (Hindi/English/Hinglish) exactly as spoken
+5. Do NOT translate or modify the content — only add speaker labels
+6. Group consecutive sentences from the same speaker together
+7. If the transcript is already short or has only one speaker, return it as "Speaker 1: [full text]"
+
+Return ONLY the formatted transcript with speaker labels. No explanation, no markdown.`
+            },
+            {
+              role: "user",
+              content: `Split this transcript by speaker:
+
+${transcript}`
+            }
+          ],
+          temperature: 0.1,
+          max_tokens: 3000,
+        });
+        const diarized = diarizeResponse.choices[0]?.message?.content?.trim();
+        if (diarized && diarized.length > 0) {
+          diarizedTranscript = diarized;
+        }
+      } catch (err: any) {
+        console.error("Speaker diarization error:", err.message);
+        // Fall back to original transcript if diarization fails
+        diarizedTranscript = transcript;
+      }
+
       let aiInsights: any = {};
       try {
         const gptResponse = await openai.chat.completions.create({
@@ -1145,7 +1194,7 @@ export async function registerRoutes(
 - sentiment: Overall meeting sentiment in one word: "Positive", "Neutral", "Concerned", or "Critical"
 Return ONLY valid JSON, no markdown.`
             },
-            { role: "user", content: `Meeting Title: ${title}\n\nTranscript:\n${transcript}` }
+            { role: "user", content: `Meeting Title: ${title}\n\nTranscript (with speakers identified):\n${diarizedTranscript}` }
           ],
           temperature: 0.3,
         });
@@ -1165,7 +1214,8 @@ Return ONLY valid JSON, no markdown.`
 
       const meeting = await storage.createMeeting({
         agencyCode, title, audioFileName,
-        transcript,
+        transcript: diarizedTranscript,  // Speaker-labeled version
+        // rawTranscript: transcript,  // Original raw transcript
         summary: aiInsights.summary || `Meeting: ${title}`,
         targets: aiInsights.targets || [],
         achievements: aiInsights.achievements || [],
@@ -1323,6 +1373,132 @@ Return ONLY valid JSON, no markdown.`
     res.setHeader("Content-Type", "application/zip");
     res.setHeader("Content-Disposition", "attachment; filename=ica-crm-project.zip");
     fs.createReadStream(zipPath).pipe(res);
+  });
+
+  // ── RC Lookup Routes ──────────────────────────────────────────────────────
+
+  // POST /api/rc-lookup — fetch RC details from API and save
+  app.post("/api/rc-lookup", authMiddleware, roleMiddleware("AGENCY_ADMIN"), async (req: AuthRequest, res: Response) => {
+    try {
+      const { rcNumber } = req.body;
+      if (!rcNumber || typeof rcNumber !== "string" || rcNumber.trim().length < 4) {
+        return res.status(400).json({ success: false, message: "Valid RC number is required" });
+      }
+
+      const cleanRC = rcNumber.trim().toUpperCase();
+      const agencyCode = req.user!.agencyCode!;
+
+      // ── Plan limit check ──────────────────────────────────────────────────
+      const agency = await storage.getAgencyByCode(agencyCode);
+      if (!agency) return res.status(404).json({ success: false, message: "Agency not found" });
+
+      const plan = agency.plan as string;
+      const rcLimit = RC_LOOKUP_LIMITS[plan] ?? 0;
+
+      if (rcLimit !== Infinity) {
+        // Count RC lookups this month
+        const allRecords = await storage.getRcRecordsByAgency(agencyCode);
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+        const thisMonthCount = allRecords.filter(r => new Date(r.createdAt!) >= startOfMonth).length;
+
+        if (thisMonthCount >= rcLimit) {
+          return res.status(403).json({
+            success: false,
+            message: `RC lookup limit reached. Your ${plan} plan allows ${rcLimit} lookups/month. Used: ${thisMonthCount}/${rcLimit}. Upgrade to get more lookups.`,
+            used: thisMonthCount,
+            limit: rcLimit,
+            plan,
+          });
+        }
+      }
+
+      // Check if already looked up recently (within 24 hours) — save API credits
+      const existing = await storage.getRcRecordByNumber(agencyCode, cleanRC);
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      if (existing && new Date(existing.createdAt!) > oneDayAgo) {
+        return res.json({ success: true, data: existing.rcData, cached: true, message: "Returned from cache (looked up within 24 hours)" });
+      }
+
+      // Check if API key is configured
+      const apiKey = process.env.RC_API_KEY;
+      if (!apiKey) {
+        return res.status(503).json({ success: false, message: "RC lookup API not configured. Please contact administrator to add RC_API_KEY." });
+      }
+
+      // Call RC lookup API (Surepass or similar)
+      const apiUrl = process.env.RC_API_URL || "https://kyc-api.surepass.io/api/v1/rc/rc-full";
+      const apiResponse = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ id_number: cleanRC }),
+      });
+
+      if (!apiResponse.ok) {
+        return res.status(apiResponse.status).json({ success: false, message: "RC API request failed. Please try again." });
+      }
+
+      const apiData = await apiResponse.json();
+
+      if (apiData.error || !apiData.data?.result) {
+        return res.status(400).json({ success: false, message: apiData.message || "Vehicle not found or invalid RC number." });
+      }
+
+      const rcData = apiData.data.result;
+
+      // Save to database
+      await storage.createRcRecord({
+        agencyCode,
+        rcNumber: cleanRC,
+        rcData: rcData as any,
+        lookedUpBy: req.user!.id,
+      });
+
+      // Audit log
+      await storage.createAuditLog({
+        agencyCode,
+        leadId: null,
+        userId: req.user!.id,
+        action: `RC_LOOKUP: ${cleanRC}`,
+        oldStatus: null,
+        newStatus: null,
+        remarks: `Looked up RC: ${cleanRC} — ${rcData.vehicle_details?.maker} ${rcData.vehicle_details?.model}`,
+        targetUserId: null,
+      });
+
+      res.json({ success: true, data: rcData });
+    } catch (error: any) {
+      console.error("RC lookup error:", error);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // GET /api/rc-records — get saved RC lookups for this agency
+  app.get("/api/rc-records", authMiddleware, roleMiddleware("AGENCY_ADMIN", "TEAM_LEADER"), async (req: AuthRequest, res: Response) => {
+    try {
+      const agencyCode = req.user!.agencyCode!;
+      const records = await storage.getRcRecordsByAgency(agencyCode);
+
+      // Calculate this month's usage
+      const agency = await storage.getAgencyByCode(agencyCode);
+      const plan = agency?.plan as string || "BASIC";
+      const limit = RC_LOOKUP_LIMITS[plan] ?? 0;
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const used = records.filter(r => new Date(r.createdAt!) >= monthStart).length;
+
+      res.json({
+        success: true,
+        data: records,
+        meta: { used, limit: limit === Infinity ? 9999999 : limit, plan },
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
   });
 
   app.post("/api/seed", async (req: Request, res: Response) => {

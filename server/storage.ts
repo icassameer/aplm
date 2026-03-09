@@ -1,13 +1,14 @@
 import { eq, and, or, desc, asc, count, sql, ilike, isNull, isNotNull, lt } from "drizzle-orm";
 import { db } from "./db";
 import {
-  agencies, users, leads, auditLogs, meetings, services, upgradeRequests,
+  agencies, users, leads, auditLogs, meetings, services, upgradeRequests, rcRecords,
   type Agency, type InsertAgency,
   type User, type InsertUser,
   type Lead, type InsertLead,
   type AuditLog, type Meeting, type InsertMeeting,
   type Service, type InsertService,
-  type UpgradeRequest, type InsertUpgradeRequest
+  type UpgradeRequest, type InsertUpgradeRequest,
+  type RcRecord, type InsertRcRecord
 } from "@shared/schema";
 
 export interface IStorage {
@@ -63,6 +64,10 @@ export interface IStorage {
   getAllUpgradeRequests(): Promise<UpgradeRequest[]>;
   updateUpgradeRequest(id: string, data: Partial<UpgradeRequest>): Promise<UpgradeRequest | undefined>;
   getUpgradeRequest(id: string): Promise<UpgradeRequest | undefined>;
+
+  createRcRecord(record: InsertRcRecord): Promise<RcRecord>;
+  getRcRecordsByAgency(agencyCode: string): Promise<RcRecord[]>;
+  getRcRecordByNumber(agencyCode: string, rcNumber: string): Promise<RcRecord | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -438,6 +443,24 @@ export class DatabaseStorage implements IStorage {
     }
 
     return notifications;
+  }
+
+  async createRcRecord(record: InsertRcRecord): Promise<RcRecord> {
+    const [created] = await db.insert(rcRecords).values(record).returning();
+    return created;
+  }
+
+  async getRcRecordsByAgency(agencyCode: string): Promise<RcRecord[]> {
+    return await db.select().from(rcRecords)
+      .where(eq(rcRecords.agencyCode, agencyCode))
+      .orderBy(desc(rcRecords.createdAt))
+      .limit(50);
+  }
+
+  async getRcRecordByNumber(agencyCode: string, rcNumber: string): Promise<RcRecord | undefined> {
+    const [record] = await db.select().from(rcRecords)
+      .where(and(eq(rcRecords.agencyCode, agencyCode), eq(rcRecords.rcNumber, rcNumber)));
+    return record;
   }
 }
 
