@@ -244,14 +244,15 @@ export async function speechToText(
   const file = await toFile(audioBuffer, `audio.${format}`);
 
   // Auto-detect language — Whisper handles Hindi, English, Hinglish, Marathi, Urdu etc.
-  const response = await openai.audio.transcriptions.create({
+  // Do NOT pass language param when undefined — lets Whisper auto-detect
+  const whisperParams: any = {
     file,
     model: "whisper-1",
-    language: language,           // Only pass if explicitly provided, else auto-detect
-    response_format: "verbose_json",
-    timestamp_granularities: ["segment"],
-    // No prompt — avoids prompt leaking into transcript output
-  } as any);
+    response_format: "text",  // Use plain text — avoids verbose_json parsing issues
+  };
+  if (language) whisperParams.language = language;
+
+  const response = await openai.audio.transcriptions.create(whisperParams);
 
   return (response as any).text || response as unknown as string;
 }
