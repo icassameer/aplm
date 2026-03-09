@@ -243,15 +243,15 @@ export async function speechToText(
 ): Promise<string> {
   const file = await toFile(audioBuffer, `audio.${format}`);
 
-  // Try with Hindi hint first for better Hinglish accuracy
-  // If file is large, chunk it for better results
+  // Auto-detect language — do NOT force any language
+  // Use a multilingual prompt so Whisper handles Hindi, English, Hinglish, Urdu, Marathi etc.
   const response = await openai.audio.transcriptions.create({
     file,
     model: "whisper-1",
-    language: language || "hi",   // Default to Hindi for better Hinglish support
+    language: language,           // Only pass if explicitly provided, else auto-detect
     response_format: "verbose_json",
     timestamp_granularities: ["segment"],
-    prompt: "यह एक हिंदी और अंग्रेजी मिश्रित बातचीत है। insurance, vehicle, RC, loan, policy, premium जैसे शब्द हो सकते हैं। कृपया सटीक transcription दें।", // Hindi prompt improves accuracy significantly
+    prompt: "This is a business conversation which may be in Hindi, English, Hinglish, Urdu, Marathi, or mixed languages. It may include terms like insurance, vehicle, RC, loan, policy, premium, ₹, percentage, names of people and places. Please transcribe accurately in the original language spoken.", // Multilingual prompt
   } as any);
 
   return (response as any).text || response as unknown as string;
