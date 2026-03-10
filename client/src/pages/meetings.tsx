@@ -32,6 +32,7 @@ export default function MeetingsPage() {
   const [transcript, setTranscript] = useState("");
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [creating, setCreating] = useState(false);
+  const [audioLanguage, setAudioLanguage] = useState("auto");
   const [jobProgress, setJobProgress] = useState<{ progress: number; message: string } | null>(null);
   const [agencyFilter, setAgencyFilter] = useState("all");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -91,6 +92,7 @@ export default function MeetingsPage() {
     try {
       const formData = new FormData();
       formData.append("title", title);
+      if (audioLanguage && audioLanguage !== "auto") formData.append("language", audioLanguage);
       if (transcript) formData.append("transcript", transcript);
       if (audioFile) formData.append("audio", audioFile);
 
@@ -302,6 +304,29 @@ export default function MeetingsPage() {
                         </div>
                       )}
                     </div>
+                    {audioFile && (
+                      <div className="space-y-2">
+                        <Label>Audio Language</Label>
+                        <select
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                          value={audioLanguage}
+                          onChange={(e) => setAudioLanguage(e.target.value)}
+                        >
+                          <option value="auto">🌐 Auto Detect</option>
+                          <option value="hi">🇮🇳 Hindi</option>
+                          <option value="mr">🇮🇳 Marathi</option>
+                          <option value="en">🇬🇧 English</option>
+                          <option value="gu">🇮🇳 Gujarati</option>
+                          <option value="pa">🇮🇳 Punjabi</option>
+                          <option value="ur">🇵🇰 Urdu</option>
+                          <option value="te">🇮🇳 Telugu</option>
+                          <option value="ta">🇮🇳 Tamil</option>
+                          <option value="kn">🇮🇳 Kannada</option>
+                          <option value="bn">🇮🇳 Bengali</option>
+                        </select>
+                        <p className="text-xs text-muted-foreground">Select language if auto-detect is incorrect</p>
+                      </div>
+                    )}
                     <div className="space-y-2">
                       <Label>Transcript / Notes (optional if audio provided)</Label>
                       <Textarea

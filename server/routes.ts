@@ -1116,6 +1116,7 @@ export async function registerRoutes(
       }
 
       const title = req.body.title;
+      const audioLanguage = req.body.language || undefined; // e.g. "hi", "mr", "en"
       let transcript = req.body.transcript || "";
       const audioFileName = req.file ? req.file.originalname : null;
 
@@ -1139,7 +1140,7 @@ export async function registerRoutes(
             await storage.updateJob(jobId, "processing", 15, "🎙️ Transcribing audio... (this may take 1-3 minutes for large files)");
             const audioBuffer = fs.readFileSync(filePath);
             const { buffer: compatibleBuffer, format } = await ensureCompatibleFormat(audioBuffer);
-            transcript = await speechToText(compatibleBuffer, format);
+            transcript = await speechToText(compatibleBuffer, format, audioLanguage);
             try { fs.unlinkSync(filePath); } catch {}
 
             // Step 2 + 3: Speaker diarization + AI Insights in ONE GPT-4o call
