@@ -12,6 +12,7 @@ import { z } from "zod";
 import type { User } from "@shared/schema";
 import { loginSchema, signUpSchema, roleEnum, planEnum, leadStatusEnum } from "@shared/schema";
 import { openai, speechToText, ensureCompatibleFormat } from "./replit_integrations/audio/client";
+import { sendWelcomeEmail, sendProspectEmail, sendPasswordResetEmail, sendPlanUpgradeEmail } from "./email";
 
 // ─── Validation helpers ────────────────────────────────────────────────────────
 function validate<T>(schema: z.ZodSchema<T>, data: unknown): { data: T } | { error: string } {
@@ -390,6 +391,17 @@ export async function registerRoutes(
         role, agencyCode, isActive: true, status: "ACTIVE"
       });
       const { password: _, ...safeUser } = user;
+
+      // Send welcome email if email provided and agency exists
+      if (email && agencyCode) {
+        const agency = await storage.getAgencyByCode(agencyCode);
+        if (agency) {
+          sendWelcomeEmail(email, fullName, username, agency.plan, agency.name).catch(err =>
+            console.error("Welcome email failed:", err.message)
+          );
+        }
+      }
+
       res.json({ success: true, data: safeUser });
     } catch (error: any) {
       if (error.message?.includes("unique")) {
@@ -1633,6 +1645,34 @@ Return ONLY valid JSON, no markdown.`
       });
     } catch (error: any) {
       res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // ── Email API Endpoints ────────────────────────────────────────────────────
+
+  // Send prospect inquiry email
+  app.post("/api/email/prospect", authMiddleware, roleMiddleware("MASTER_ADMIN"), async (req: AuthRequest, res: Response) => {
+    try {
+      const { to, name } = req.body;
+      if (!to || !name) return res.status(400).json({ success: false, message: "Email and name required" });
+      const sent = await sendProspectEmail(to, name);
+      res.json({ success: sent, message: sent ? "Prospect email sent!" : "Failed to send email" });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // Send welcome email manually
+  app.post("/api/email/welcome", authMiddleware, roleMiddleware("MASTER_ADMIN"), async (req: AuthRequest, res: Response) => {
+    try {
+      const { to, fullName, username, agencyCode } = req.body;
+      if (!to || !fullName || !username || !agencyCode) return res.status(400).json({ success: false, message: "Missing fields" });
+      const agency = await storage.getAgencyByCode(agencyCode);
+      if (!agency) return res.status(404).json({ success: false, message: "Agency not found" });
+      const sent = await sendWelcomeEmail(to, fullName, username, agency.plan, agency.name);
+      res.json({ success: sent, message: sent ? "Welcome email sent!" : "Failed to send email" });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
     }
   });
 
