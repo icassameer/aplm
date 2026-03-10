@@ -59,7 +59,7 @@ function baseTemplate(content: string): string {
               ICA — Innovation, Consulting & Automation<br>
               <a href="https://crm.icaweb.in" style="color:#2e86c1;">crm.icaweb.in</a> &nbsp;|&nbsp;
               <a href="mailto:support@icaweb.in" style="color:#2e86c1;">support@icaweb.in</a> &nbsp;|&nbsp;
-              +91 99879 69850
+              +91 99679 69850
             </p>
             <p style="margin:8px 0 0;color:#adb5bd;font-size:11px;">
               By using ICA CRM you agree to our 
@@ -132,7 +132,7 @@ export async function sendWelcomeEmail(
       </p>
     </div>
 
-    <p style="color:#566573;margin:0;">Need help? Reply to this email or call <strong>+91 99879 69850</strong></p>
+    <p style="color:#566573;margin:0;">Need help? Reply to this email or call <strong>+91 99679 69850</strong></p>
     <p style="color:#566573;margin:8px 0 0;">Best regards,<br><strong>Sameer | ICA Team</strong></p>
   `;
 
@@ -162,7 +162,7 @@ export async function sendProspectEmail(to: string, name: string): Promise<boole
       <p style="margin:0;color:#566573;font-size:13px;">Simply reply to this email with your preferred plan and we'll activate your account within 24 hours!</p>
     </div>
 
-    <p style="color:#566573;margin:0;">Questions? Call us at <strong>+91 99879 69850</strong> or visit <a href="https://crm.icaweb.in" style="color:#2e86c1;">crm.icaweb.in</a></p>
+    <p style="color:#566573;margin:0;">Questions? Call us at <strong>+91 99679 69850</strong> or visit <a href="https://crm.icaweb.in" style="color:#2e86c1;">crm.icaweb.in</a></p>
     <p style="color:#566573;margin:8px 0 0;">Best regards,<br><strong>Sameer | ICA Team</strong></p>
   `;
 
