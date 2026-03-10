@@ -1,14 +1,15 @@
 import { eq, and, or, desc, asc, count, sql, ilike, isNull, isNotNull, lt } from "drizzle-orm";
 import { db } from "./db";
 import {
-  agencies, users, leads, auditLogs, meetings, services, upgradeRequests, rcRecords,
+  agencies, users, leads, auditLogs, meetings, services, upgradeRequests, rcRecords, processingJobs,
   type Agency, type InsertAgency,
   type User, type InsertUser,
   type Lead, type InsertLead,
   type AuditLog, type Meeting, type InsertMeeting,
   type Service, type InsertService,
   type UpgradeRequest, type InsertUpgradeRequest,
-  type RcRecord, type InsertRcRecord
+  type RcRecord, type InsertRcRecord,
+  type ProcessingJob
 } from "@shared/schema";
 
 export interface IStorage {
@@ -68,6 +69,12 @@ export interface IStorage {
   createRcRecord(record: InsertRcRecord): Promise<RcRecord>;
   getRcRecordsByAgency(agencyCode: string): Promise<RcRecord[]>;
   getRcRecordByNumber(agencyCode: string, rcNumber: string): Promise<RcRecord | undefined>;
+
+  // Processing jobs
+  createJob(id: string, message: string): Promise<void>;
+  updateJob(id: string, status: string, progress: number, message: string, result?: any, error?: string): Promise<void>;
+  getJob(id: string): Promise<ProcessingJob | undefined>;
+  deleteJob(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -461,6 +468,25 @@ export class DatabaseStorage implements IStorage {
     const [record] = await db.select().from(rcRecords)
       .where(and(eq(rcRecords.agencyCode, agencyCode), eq(rcRecords.rcNumber, rcNumber)));
     return record;
+  }
+
+  async createJob(id: string, message: string): Promise<void> {
+    await db.insert(processingJobs).values({ id, status: "processing", progress: 5, message });
+  }
+
+  async updateJob(id: string, status: string, progress: number, message: string, result?: any, error?: string): Promise<void> {
+    await db.update(processingJobs)
+      .set({ status, progress, message, result: result || null, error: error || null, updatedAt: new Date() })
+      .where(eq(processingJobs.id, id));
+  }
+
+  async getJob(id: string): Promise<ProcessingJob | undefined> {
+    const [job] = await db.select().from(processingJobs).where(eq(processingJobs.id, id));
+    return job;
+  }
+
+  async deleteJob(id: string): Promise<void> {
+    await db.delete(processingJobs).where(eq(processingJobs.id, id));
   }
 }
 

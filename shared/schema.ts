@@ -185,3 +185,16 @@ export type LeadStatus = typeof leadStatusEnum[number];
 export type RcRecord = typeof rcRecords.$inferSelect;
 export const insertRcRecordSchema = createInsertSchema(rcRecords).omit({ id: true, createdAt: true });
 export type InsertRcRecord = z.infer<typeof insertRcRecordSchema>;
+
+// Processing jobs table — shared across PM2 cluster instances
+export const processingJobs = pgTable("processing_jobs", {
+  id: text("id").primaryKey(),
+  status: text("status").notNull().default("processing"), // processing | done | error
+  progress: integer("progress").notNull().default(0),
+  message: text("message").notNull().default(""),
+  result: jsonb("result"),
+  error: text("error"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export type ProcessingJob = typeof processingJobs.$inferSelect;

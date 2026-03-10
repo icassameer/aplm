@@ -1082,14 +1082,11 @@ export async function registerRoutes(
     }
   });
 
-  // In-memory job store for background processing
-  const processingJobs = new Map<string, { status: string; progress: number; message: string; result?: any; error?: string; createdAt: Date }>();
-
-  // GET /api/meetings/job/:jobId — check background job status
+  // GET /api/meetings/job/:jobId — check background job status (DB-backed, works across PM2 cluster)
   app.get("/api/meetings/job/:jobId", authMiddleware, async (req: AuthRequest, res: Response) => {
-    const job = processingJobs.get(req.params.jobId);
+    const job = await storage.getJob(req.params.jobId);
     if (!job) return res.status(404).json({ success: false, message: "Job not found" });
-    res.json({ success: true, ...job });
+    res.json({ success: true, status: job.status, progress: job.progress, message: job.message, result: job.result, error: job.error });
   });
 
   app.post("/api/meetings", authMiddleware, roleMiddleware("AGENCY_ADMIN"), upload.single("audio"), async (req: AuthRequest, res: Response) => {
@@ -1129,13 +1126,8 @@ export async function registerRoutes(
         const originalName = req.file.originalname;
         const userId = req.user!.id;
 
-        // Start background processing
-        processingJobs.set(jobId, {
-          status: "processing",
-          progress: 5,
-          message: "🎵 Audio received, starting transcription...",
-          createdAt: new Date(),
-        });
+        // Start background processing — stored in DB so all PM2 instances can access it
+        await storage.createJob(jobId, "🎵 Audio received, starting transcription...");
 
         // Return job ID immediately so frontend can poll
         res.json({ success: true, jobId, message: "Processing started in background" });
@@ -1144,14 +1136,14 @@ export async function registerRoutes(
         (async () => {
           try {
             // Step 1: Transcription
-            processingJobs.set(jobId, { status: "processing", progress: 15, message: "🎙️ Transcribing audio... (this may take 1-3 minutes for large files)", createdAt: new Date() });
+            await storage.updateJob(jobId, "processing", 15, "🎙️ Transcribing audio... (this may take 1-3 minutes for large files)");
             const audioBuffer = fs.readFileSync(filePath);
             const { buffer: compatibleBuffer, format } = await ensureCompatibleFormat(audioBuffer);
             transcript = await speechToText(compatibleBuffer, format);
             try { fs.unlinkSync(filePath); } catch {}
 
             // Step 2: Speaker diarization
-            processingJobs.set(jobId, { status: "processing", progress: 45, message: "👥 Identifying speakers...", createdAt: new Date() });
+            await storage.updateJob(jobId, "processing", 45, "👥 Identifying speakers...");
             let diarizedTranscript = transcript;
             try {
               const diarizeResponse = await openai.chat.completions.create({
@@ -1186,7 +1178,7 @@ ${transcript}` }
             }
 
             // Step 3: AI Insights
-            processingJobs.set(jobId, { status: "processing", progress: 65, message: "🧠 Extracting AI insights & KPIs...", createdAt: new Date() });
+            await storage.updateJob(jobId, "processing", 65, "🧠 Extracting AI insights & KPIs...");
             let aiInsights: any = {};
             try {
               const gptResponse = await openai.chat.completions.create({
@@ -1241,7 +1233,7 @@ ${diarizedTranscript}` }
             }
 
             // Step 4: Save to DB
-            processingJobs.set(jobId, { status: "processing", progress: 90, message: "💾 Saving results...", createdAt: new Date() });
+            await storage.updateJob(jobId, "processing", 90, "💾 Saving results...");
 
             // Detect language
             const hindiCharCount = (diarizedTranscript.match(/[ऀ-ॿ]/g) || []).length;
@@ -1270,15 +1262,15 @@ ${diarizedTranscript}` }
               createdBy: userId,
             });
 
-            processingJobs.set(jobId, { status: "done", progress: 100, message: "✅ Analysis complete!", result: meeting, createdAt: new Date() });
+            await storage.updateJob(jobId, "done", 100, "✅ Analysis complete!", meeting);
 
             // Clean up job after 10 minutes
-            setTimeout(() => processingJobs.delete(jobId), 10 * 60 * 1000);
+            setTimeout(() => storage.deleteJob(jobId), 10 * 60 * 1000);
 
           } catch (err: any) {
             console.error("Background job error:", err.message);
             try { fs.unlinkSync(filePath); } catch {}
-            processingJobs.set(jobId, { status: "error", progress: 0, message: `❌ Processing failed: ${err.message}`, error: err.message, createdAt: new Date() });
+            await storage.updateJob(jobId, "error", 0, `❌ Processing failed: ${err.message}`, undefined, err.message);
           }
         })();
 
