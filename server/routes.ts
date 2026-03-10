@@ -1142,97 +1142,79 @@ export async function registerRoutes(
             transcript = await speechToText(compatibleBuffer, format);
             try { fs.unlinkSync(filePath); } catch {}
 
-            // Step 2: Speaker diarization
-            await storage.updateJob(jobId, "processing", 45, "👥 Identifying speakers...");
-            let diarizedTranscript = transcript;
-            try {
-              const diarizeResponse = await openai.chat.completions.create({
-                model: "gpt-4o-mini",
-                messages: [
-                  {
-                    role: "system",
-                    content: `You are an expert at analyzing Hindi/Hinglish/English conversation transcripts and identifying different speakers.
-
-Your task is to split the transcript into labeled speaker turns. Follow these rules:
-1. Identify distinct speakers based on conversation flow, questions vs answers, and tone
-2. Use actual names/titles if clearly mentioned (e.g. "Sir Ji:", "Haji:", "Bhai:") — otherwise use "Speaker 1:", "Speaker 2:", etc.
-3. Each speaker turn on a new line starting with speaker label
-4. Preserve the EXACT original language (Hindi/English/Hinglish) — do NOT translate or modify
-5. Group consecutive sentences from same speaker together
-6. For insurance/business conversations: buyer usually asks questions, seller explains products/prices
-7. If only one speaker, return as "Speaker 1: [full text]"
-
-Return ONLY the formatted transcript. No explanation, no markdown.`
-                  },
-                  { role: "user", content: `Split this transcript by speaker:
-
-${transcript}` }
-                ],
-                temperature: 0.1,
-                max_tokens: 4000,
-              });
-              const diarized = diarizeResponse.choices[0]?.message?.content?.trim();
-              if (diarized && diarized.length > 0) diarizedTranscript = diarized;
-            } catch (err: any) {
-              console.error("Diarization error:", err.message);
-            }
-
-            // Step 3: AI Insights
-            await storage.updateJob(jobId, "processing", 65, "🧠 Extracting AI insights & KPIs...");
+            // Step 2 + 3: Speaker diarization + AI Insights in ONE GPT-4o call
+            await storage.updateJob(jobId, "processing", 45, "👥 Analyzing speakers & extracting insights...");
+            let diarizedTranscript = `Speaker 1: ${transcript}`;
             let aiInsights: any = {};
+
             try {
               const gptResponse = await openai.chat.completions.create({
-                model: "gpt-4o-mini",
+                model: "gpt-4o",
                 messages: [
                   {
                     role: "system",
-                    content: `You are a senior AI analyst for an insurance CRM. Analyze this Hindi/Hinglish/English meeting transcript and extract detailed, accurate insights.
+                    content: `You are an expert meeting analyst and multilingual transcription assistant for an insurance CRM.
 
-CRITICAL RULES:
-- Extract EXACT numbers, rates, quantities mentioned — do NOT approximate
-- For insurance meetings: capture policy names, premium amounts, coverage details, vehicle details
-- For business meetings: capture order quantities, rates per unit, delivery timelines
-- Names: capture all people mentioned (Sir Ji, Haji, Bhai, or actual names)
-- If something is NOT mentioned, return empty array — do NOT fabricate
-- All values should be in the language they were spoken (Hindi numbers are fine)
+You will receive a raw Whisper transcript. Your tasks:
+1. Clean & format with speaker labels
+2. Extract structured business insights
 
-Return a JSON object with these exact fields:
+TRANSCRIPTION RULES:
+- Identify distinct speakers from conversation flow (questions vs answers, tone changes)
+- Label as "Speaker 1:", "Speaker 2:" etc — or use actual names/titles if mentioned
+- Preserve EXACT original language (Hindi, Marathi, English, Hinglish — do NOT translate)
+- If Whisper has repeated sentences, de-duplicate them
+- Mark unclear parts as [unclear]
+- If only one speaker, use "Speaker 1:"
+
+INSIGHT RULES:
+- Extract EXACT numbers, rates, quantities — never fabricate
+- Empty array [] if section has no data
+- sentiment: "Positive", "Neutral", "Concerned", or "Critical"
+
+Return ONLY valid JSON (no markdown, no explanation):
 {
-  "summary": "4-6 sentence summary in English covering purpose, key discussions, and outcomes",
-  "targets": ["specific target with numbers/context"],
-  "achievements": ["specific achievement with data"],
-  "responsiblePersons": ["Name/Title - their role or responsibility"],
-  "kpis": ["Metric name - exact value (e.g. Rate - ₹71.50, Quantity - 15 pieces)"],
-  "deadlines": ["Task - deadline/timeline"],
-  "riskPoints": ["specific risk or concern raised"],
-  "actionItems": ["specific action - who is responsible"],
-  "keyDecisions": ["specific decision made"],
-  "nextSteps": ["specific next step agreed upon"],
+  "diarizedTranscript": "Speaker 1: text...\nSpeaker 2: text...",
+  "summary": "5-8 sentence summary of purpose, discussions, decisions, outcomes",
+  "targets": ["target with numbers"],
+  "achievements": ["achievement with data"],
+  "responsiblePersons": ["Name - role/responsibility"],
+  "kpis": ["Metric - exact value"],
+  "deadlines": ["Task - timeline"],
+  "riskPoints": ["risk or concern"],
+  "actionItems": ["action - owner"],
+  "keyDecisions": ["decision made"],
+  "nextSteps": ["next step"],
   "clientMentions": ["Name/Company - context"],
-  "keyFigures": ["Description - exact value (e.g. Rate per piece - ₹71.50)"],
+  "keyFigures": ["Description - exact value"],
   "sentiment": "Positive|Neutral|Concerned|Critical"
-}
-
-Return ONLY valid JSON, no markdown, no explanation.`
+}`
                   },
-                  { role: "user", content: `Meeting Title: ${title}
-
-Transcript (with speakers):
-${diarizedTranscript}` }
+                  {
+                    role: "user",
+                    content: `Meeting Title: ${title}\n\nRaw Transcript:\n${transcript}`
+                  }
                 ],
                 temperature: 0.2,
-                max_tokens: 2500,
+                max_tokens: 4000,
               });
 
               const raw = gptResponse.choices[0]?.message?.content?.trim() || "{}";
               const cleaned = raw.replace(/```json|```/g, "").trim();
-              aiInsights = JSON.parse(cleaned);
+              const parsed = JSON.parse(cleaned);
+
+              if (parsed.diarizedTranscript?.trim()) {
+                diarizedTranscript = parsed.diarizedTranscript;
+              }
+              const { diarizedTranscript: _dt, ...insightsOnly } = parsed;
+              aiInsights = insightsOnly;
+
             } catch (err: any) {
-              console.error("GPT insights error:", err.message);
-              aiInsights = { summary: "Could not extract insights", sentiment: "Neutral" };
+              console.error("GPT analysis error:", err.message);
+              aiInsights = { summary: "Transcription complete but AI analysis failed. Please retry.", sentiment: "Neutral" };
             }
 
-            // Step 4: Save to DB
+                        // Step 4: Save to DB
             await storage.updateJob(jobId, "processing", 90, "💾 Saving results...");
 
             // Detect language
