@@ -1,319 +1,291 @@
 # ICA CRM — Enterprise Lead Management System
-> Innovation, Consulting & Automation | Support: +91 9967969850
+> Innovation, Consulting & Automation | Support: +91 99679 69850 | support@icaweb.in
 
 ---
 
 ## 📋 PROJECT BLUEPRINT
-*This document is the single source of truth. Resume any session by sharing this file.*
+*This is the single source of truth. Share this file at the start of any new session to resume work instantly.*
 
 ---
 
-## 🗂️ Quick Reference
+## 🔗 Quick Reference
 
 | Item | Detail |
 |------|--------|
+| **Live URL** | https://crm.icaweb.in |
 | **GitHub** | https://github.com/icassameer/icacrmweb.in |
 | **Branch** | `master` |
-| **Domain** | crm.icaweb.in (DNS pending VPS IP) |
-| **Support** | +91 9967969850 |
-| **Local Dev** | http://localhost:5000 |
-| **Node Version** | v20.x (v24 also works locally) |
-| **DB** | PostgreSQL via Drizzle ORM |
-| **SOP Doc** | ICA_CRM_SOP_v2.docx (security + migration guide) |
+| **Server IP** | 203.174.22.119 |
+| **Server Name** | crmicawebin (HostBet) |
+| **SSH** | `ssh root@203.174.22.119` (port 22) |
+| **Root Password** | Icacrm@321 |
+| **Working Dir** | /var/www/ica-crm |
+| **OS** | Ubuntu 24.04 LTS |
+| **Plan** | Micro — 2 vCPU, 4GB RAM, 40GB NVMe |
+| **Support Portal** | https://clients.hostbet.in/ |
+| **VS Code SSH** | Remote-SSH extension → Host: ICA-CRM → 203.174.22.119 |
 
 ---
 
-## ✅ COMPLETED TASKS
+## 🗄️ Database
 
-| Task | Status | Commit |
-|------|--------|--------|
-| Initial CRM build (all roles) | ✅ Done | Initial commit |
-| AI Proceeding with monthly limits | ✅ Done | Initial commit |
-| Team Leader view-only AI Proceeding | ✅ Done | Initial commit |
-| Bulk lead upload + auth template download | ✅ Done | Initial commit |
-| RC lookup feature (attempted) | ❌ Reverted | Revert RC lookup |
-| RC lookup reverted (routes + frontend) | ✅ Done | Revert RC lookup |
-| Security hardening v2 | ✅ Done | Security hardening |
-| helmet.js security headers | ✅ Done | Security hardening |
-| CORS restriction to production domain | ✅ Done | Security hardening |
-| Zod input validation (login + signup) | ✅ Done | Security hardening |
-| File type validation on uploads | ✅ Done | Security hardening |
-| Seed endpoint blocked in production | ✅ Done | Security hardening |
-| PM2 cluster config (ecosystem.config.cjs) | ✅ Done | Security hardening |
-| Nginx production config (nginx.conf) | ✅ Done | Security hardening |
-| VPS setup script (setup-vps.sh) | ✅ Done | Security hardening |
-| Deploy script (deploy.sh) | ✅ Done | Security hardening |
-| Pushed to GitHub (master branch) | ✅ Done | — |
+| Item | Detail |
+|------|--------|
+| **Engine** | PostgreSQL 16 |
+| **Database** | ica_crm |
+| **User** | postgres |
+| **Password** | Admin@1234 |
+| **URL** | postgresql://postgres:Admin@1234@localhost:5432/ica_crm |
+| **ORM** | Drizzle ORM |
 
 ---
 
-## ⏳ PENDING TASKS (In Order)
+## ⚙️ Server .env
 
-| # | Task | Notes |
-|---|------|-------|
-| 1 | 💳 Get international payment method | Niyo Global (free) or Scapia card — need Aadhaar + PAN |
-| 2 | 🖥️ Buy Hetzner CX22 VPS | €4/month (~₹360) — hetzner.com/cloud |
-| 3 | 🤖 Get OpenAI API key | platform.openai.com — add $10 credits |
-| 4 | 🌐 Point DNS to VPS | crm.icaweb.in → VPS IP (GoDaddy panel) |
-| 5 | 🚀 Run setup-vps.sh on server | Fresh Ubuntu 24.04 setup |
-| 6 | ⚙️ Configure .env on server | SESSION_SECRET + DATABASE_URL + OPENAI_API_KEY |
-| 7 | 🗄️ Restore database backup | Upload + restore ica_crm_backup.sql |
-| 8 | 🔐 Get SSL certificate | sudo certbot --nginx -d crm.icaweb.in |
-| 9 | ✅ Go live testing | All roles + AI Proceeding + Excel export |
-| 10 | 🔑 RC lookup (future) | Use Surepass API (₹2-3/lookup) — proper paid API |
-
----
-
-## 🏗️ ARCHITECTURE
-
-### Tech Stack
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 18 + Vite + TailwindCSS + Shadcn UI + Recharts |
-| Backend | Express.js 5 + TypeScript + JWT |
-| Database | PostgreSQL + Drizzle ORM |
-| AI | OpenAI Whisper (transcription) + GPT-4o-mini (analysis) |
-| Auth | JWT (24h expiry) + bcrypt (10 rounds) |
-| Security | helmet + cors + express-rate-limit + zod |
-| Process | PM2 cluster mode (all CPU cores) |
-| Web Server | Nginx (reverse proxy + SSL) |
-
-### Role Hierarchy
 ```
-MASTER_ADMIN
-  └── AGENCY_ADMIN
-        └── TEAM_LEADER
-              └── TELE_CALLER
-```
-
-| Role | Permissions |
-|------|------------|
-| MASTER_ADMIN | Create agencies, assign plans, approve users, view all AI proceedings, delete agencies (cascade) |
-| AGENCY_ADMIN | Manage users, leads, services, AI Proceeding (PRO+), reports, request plan upgrades |
-| TEAM_LEADER | Add/assign/delete leads, view team performance, view AI proceedings (read-only) |
-| TELE_CALLER | Update assigned leads only, view personal KPIs |
-
-### Subscription Plans
-| Plan | AI Proceeding | Lead Limit | User Limit |
-|------|--------------|------------|------------|
-| BASIC | ❌ No access | 500 | 10 |
-| PRO | ✅ 10/month | 2,000 | 50 |
-| ENTERPRISE | ✅ Unlimited | 10,000 | 200 |
-
----
-
-## 🔐 SECURITY IMPLEMENTATION (v2)
-
-### Applied Controls
-- ✅ `helmet.js` — X-Frame-Options, HSTS, CSP, noSniff, referrer policy
-- ✅ CORS restricted to `crm.icaweb.in` in production
-- ✅ Rate limiting: Login (10/15min), Signup (5/hr), API (200/min), Uploads (10/min)
-- ✅ Zod validation on all auth endpoints
-- ✅ File MIME type validation on uploads
-- ✅ `/api/seed` blocked in production (returns 404)
-- ✅ JWT secret length enforced (32+ chars minimum)
-- ✅ Tokens/passwords scrubbed from server logs
-- ✅ Generic error messages in production (no stack traces)
-- ✅ Body size capped at 1MB (prevents body bombing)
-- ✅ Audit logs for all sensitive operations
-
-### Remaining Security TODOs (P2/P3)
-- ⏳ Brute force account lockout (after 5 failed logins, lock 15min)
-- ⏳ Database field-level encryption for phone/email
-- ⏳ Dependency vulnerability scanning (npm audit in CI)
-- ⏳ Privacy policy + data retention policy docs
-
-### SOC 2 Score
-- Current: **62/100**
-- Target: **90/100** (after P1 fixes above)
-
----
-
-## 💰 COST BREAKDOWN
-
-| Item | Cost |
-|------|------|
-| Hetzner CX22 VPS | €4/month (~₹360) — increases to €4.49 from April 2026 |
-| OpenAI API (10 agencies PRO) | ~$18/month (~₹1,500) |
-| Domain (icaweb.in) | Already owned (GoDaddy) |
-| **Total** | **~₹1,900/month** |
-
-### OpenAI Cost Detail
-- Whisper transcription: $0.006/min (~₹0.50/min)
-- GPT-4o-mini analysis: ~$0.002/meeting
-- 10 meetings × 30min = ~$1.82/month per agency
-- Start with: **$10 credits**
-
----
-
-## 🚀 DEPLOYMENT GUIDE
-
-### Quick Deploy (after VPS is ready)
-```bash
-# On server — first time only:
-chmod +x setup-vps.sh && ./setup-vps.sh
-
-# Configure environment:
-cp .env.example .env
-nano .env  # Fill in SESSION_SECRET, DATABASE_URL, OPENAI_API_KEY
-
-# Build and start:
-npm install && npm run build
-pm2 start ecosystem.config.cjs --env production
-pm2 save && pm2 startup
-
-# Setup Nginx:
-cp nginx.conf /etc/nginx/sites-available/ica-crm
-ln -s /etc/nginx/sites-available/ica-crm /etc/nginx/sites-enabled/
-nginx -t && systemctl reload nginx
-
-# SSL:
-certbot --nginx -d crm.icaweb.in
-```
-
-### Future Updates (after each git push)
-```bash
-ssh root@YOUR_VPS_IP
-cd /var/www/ica-crm
-./deploy.sh   # Pulls, builds, restarts automatically
-```
-
----
-
-## 🗄️ DATABASE
-
-### Schema Tables
-| Table | Purpose |
-|-------|---------|
-| agencies | Multi-tenant agency records |
-| users | All users across all agencies |
-| leads | Lead records (unique per agency+phone) |
-| audit_logs | All sensitive action logs |
-| meetings | AI Proceeding recordings + analysis |
-| services | Agency-specific service types |
-| upgrade_requests | Plan upgrade workflow |
-| conversations | Replit AI chat (integration) |
-| messages | Replit AI messages (integration) |
-
-### Key Indexes
-```sql
--- Already in schema:
-leads: (agency_code, phone) UNIQUE
-leads: agency_code, status, assigned_to, follow_up_date, service
-audit_logs: agency_code, lead_id, user_id, created_at
-meetings: agency_code, created_by
-users: agency_code, role, status
-agencies: agency_code
-```
-
-### Restore Backup on VPS
-```bash
-# Upload from local machine:
-scp ica_crm_backup.sql root@VPS_IP:/var/www/ica-crm/
-
-# Restore on server:
-psql postgresql://ica_user:PASSWORD@localhost:5432/ica_crm < ica_crm_backup.sql
-```
-
----
-
-## 🔑 ENVIRONMENT VARIABLES
-
-```env
-# Generate SESSION_SECRET with:
-# openssl rand -base64 64
-
-SESSION_SECRET=256bit_random_string_min_32_chars
-DATABASE_URL=postgresql://ica_user:StrongPassword@localhost:5432/ica_crm
-OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxx
+SESSION_SECRET=IcaCrm@SecretKey2024@Sameer@321@ICA@CRM@SECURE
+DATABASE_URL=postgresql://postgres:Admin@1234@localhost:5432/ica_crm
+OPENAI_API_KEY=<real key added>
 NODE_ENV=production
 ALLOWED_ORIGINS=https://crm.icaweb.in
-```
-
-> ⚠️ NEVER commit `.env` to GitHub. It's in `.gitignore`.
-
----
-
-## 🧪 DEMO CREDENTIALS
-
-| Role | Username | Password | Agency |
-|------|----------|----------|--------|
-| Master Admin | masteradmin | admin123 | — |
-| Agency Admin | agencyadmin | agency123 | ICA-DEMO01 (PRO) |
-| Team Leader | teamlead1 | team123 | ICA-DEMO01 |
-| Tele Caller | telecaller1 | caller123 | ICA-DEMO01 |
-
-> ⚠️ Change all passwords before going live!
-
----
-
-## 📁 PROJECT STRUCTURE
-
-```
-icacrmweb.in/
-├── client/
-│   ├── src/
-│   │   ├── pages/          # All page components
-│   │   ├── components/     # Shared UI components
-│   │   ├── hooks/          # use-api, use-toast, use-mobile
-│   │   └── lib/            # auth.tsx, queryClient.ts
-│   └── public/             # Static assets + logo
-├── server/
-│   ├── index.ts            # Express setup + security middleware
-│   ├── routes.ts           # All API endpoints
-│   ├── storage.ts          # Database CRUD layer
-│   ├── db.ts               # PostgreSQL connection
-│   └── replit_integrations/ # OpenAI audio/image/chat clients
-├── shared/
-│   └── schema.ts           # Drizzle schema + Zod validators
-├── .env.example            # Environment variable template
-├── .gitignore              # Excludes .env, node_modules, dist
-├── ecosystem.config.cjs    # PM2 cluster production config
-├── nginx.conf              # Nginx reverse proxy + SSL config
-├── deploy.sh               # One-command deployment script
-├── setup-vps.sh            # Fresh VPS setup script
-└── ICA_CRM_SOP_v2.docx    # Full SOP + security + migration guide
+RESEND_API_KEY=<active — domain icaweb.in verified>
+FROM_EMAIL=support@icaweb.in
+RC_API_KEY=<pending — Surepass>
 ```
 
 ---
 
-## 🔧 TROUBLESHOOTING
+## 🏗️ Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 18 + Vite + TailwindCSS + Shadcn UI |
+| Backend | Express.js 5 + TypeScript |
+| Database | PostgreSQL 16 + Drizzle ORM |
+| AI | OpenAI Whisper (transcription) + GPT-4o (analysis) |
+| Email | Resend API — domain icaweb.in (Verified ✓) |
+| Process Manager | PM2 cluster (2 instances) |
+| Web Server | Nginx + SSL (Let's Encrypt) |
+| Security | helmet.js + CORS + rate-limit + Zod validation |
+
+---
+
+## 👥 Roles & Access
+
+| Role | Access |
+|------|--------|
+| MASTER_ADMIN | Full system — all agencies, users, plans, upgrade approvals |
+| AGENCY_ADMIN | Own agency — leads, users, AI Proceeding, RC lookup, reports, request upgrades |
+| TEAM_LEADER | Add leads, bulk upload, assign leads to telecallers, view team performance |
+| TELE_CALLER | Own assigned leads only — add/edit/call/WhatsApp/update status |
+
+> ⚠️ TEAM_LEADER is the **only** role that can assign leads to telecallers.
+
+---
+
+## 💰 Pricing Plans (FINAL)
+
+| Feature | BASIC ₹2,500/mo | PRO ₹5,500/mo | ENTERPRISE ₹15,000/mo |
+|---------|:-:|:-:|:-:|
+| Leads | 500 | 1,000 | Unlimited |
+| Users | 5 | 10 | Unlimited |
+| AI Proceeding | ❌ | 10/month | Unlimited |
+| RC Lookup | ❌ | 100/month | Unlimited |
+| WhatsApp | ✅ | ✅ | ✅ |
+| Automated Emails | ✅ | ✅ | ✅ |
+| Reports | Basic | Advanced | Full Analytics |
+| Support | Email | Email + Chat | Dedicated Manager |
+
+---
+
+## ✅ COMPLETED FEATURES
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Multi-role auth (JWT) | ✅ | 4 roles |
+| Lead management | ✅ | CRUD + bulk upload |
+| WhatsApp click-to-chat | ✅ | With lead name + service |
+| AI Proceeding | ✅ | GPT-4o + Whisper background processing |
+| Speaker diarization | ✅ | Multi-speaker labeling |
+| Multilingual transcription | ✅ | Language selector (Hindi/Marathi/English) |
+| RC Lookup UI | ✅ | Frontend ready, API key pending |
+| Plan limits enforcement | ✅ | Leads, users, AI, RC per plan |
+| Performance reports | ✅ | |
+| Audit logs | ✅ | |
+| DB-backed job processing | ✅ | Fixes PM2 cluster job sharing |
+| VPS deployment | ✅ | HostBet Micro |
+| Nginx + SSL | ✅ | https://crm.icaweb.in |
+| GitHub | ✅ | Branch: master |
+| Resend email integration | ✅ | Welcome, prospect, plan upgrade emails |
+| Plan upgrade email | ✅ | Auto-fires on MASTER_ADMIN approval |
+| VS Code Remote SSH | ✅ | Configured on new PC |
+| fontSrc CSP fix | ✅ | Duplicate helmet directive removed |
+| .gitignore cleanup | ✅ | .env.save* excluded |
+
+---
+
+## ⏳ PENDING TASKS
+
+| Task | Priority | Notes |
+|------|----------|-------|
+| RC API key (Surepass) | 🔴 High | ₹2.25/hit, min ₹25k deposit |
+| Update plan pricing in DB | 🔴 High | PRO=5500, ENTERPRISE=15000 |
+| Privacy policy page | 🟡 Medium | /privacy-policy route |
+| Auto-reply on support@icaweb.in | 🟡 Medium | Acknowledge incoming emails |
+| AI Proceeding accuracy | 🟡 Medium | Marathi/Hindi improvement |
+| Exotel voice integration | 🟡 Medium | Phase 2 |
+| Welcome email automation | ✅ Done | Auto-sent on user approval |
+
+---
+
+## 📧 Automated Email System (Resend)
+
+| Email Type | Trigger | Recipient |
+|-----------|---------|-----------|
+| Welcome Email | MASTER_ADMIN approves new agency user | New AGENCY_ADMIN |
+| Prospect Inquiry | Manual via `/api/email/prospect` | Prospective client |
+| Plan Upgrade | MASTER_ADMIN approves upgrade request | Agency admin |
+| Password Reset | Not automated — share manually via WhatsApp | N/A |
+
+> Domain `icaweb.in` is **verified** on Resend. All emails sent from `support@icaweb.in`.
+
+### Manual Email API Endpoints (MASTER_ADMIN only)
+```bash
+POST /api/email/prospect   # Send prospect inquiry email
+POST /api/email/welcome    # Send welcome email manually
+```
+
+---
+
+## 🚀 Common Server Commands
+
+```bash
+# SSH
+ssh root@203.174.22.119
+
+# Navigate
+cd /var/www/ica-crm
+
+# Status
+pm2 status
+
+# Logs
+pm2 logs ica-crm --lines 50
+
+# Deploy latest
+git pull origin master && npm run build && pm2 restart all
+
+# Edit .env
+nano /var/www/ica-crm/.env && pm2 restart all
+
+# DB access
+psql -U postgres -h localhost -d ica_crm
+
+# SSL renew
+certbot renew
+```
+
+---
+
+## 🖥️ VS Code Remote SSH Setup (New PC)
+
+```
+1. Install "Remote - SSH" extension (by Microsoft)
+2. Ctrl+Shift+P → Remote-SSH: Open SSH Configuration File
+3. Add:
+   Host ICA-CRM
+       HostName 203.174.22.119
+       User root
+       Port 22
+4. Connect → enter password: Icacrm@321
+5. Open Folder → /var/www/ica-crm
+```
+
+---
+
+## 🔐 Security Implementation
+
+| Control | Status |
+|---------|--------|
+| helmet.js (CSP, HSTS, noSniff, referrer) | ✅ Active — fontSrc duplicate fixed |
+| CORS restricted to crm.icaweb.in | ✅ Active |
+| Rate limiting (login 10/15min, API 200/min) | ✅ Active |
+| Zod input validation | ✅ Active |
+| JWT secret enforced (32+ chars) | ✅ Active |
+| Seed endpoint blocked in production | ✅ Active |
+| Audit logs for all sensitive actions | ✅ Active |
+| .env.save* excluded from git | ✅ Fixed |
+
+---
+
+## 📁 Key File Locations
+
+| File | Path |
+|------|------|
+| Backend routes | server/routes.ts |
+| Email functions | server/email.ts |
+| DB schema | shared/schema.ts |
+| Storage layer | server/storage.ts |
+| Audio/AI client | server/replit_integrations/audio/client.ts |
+| Frontend pages | client/src/pages/ |
+| Sidebar nav | client/src/components/app-sidebar.tsx |
+| PM2 config | ecosystem.config.cjs |
+| Nginx config | /etc/nginx/sites-enabled/ica-crm |
+| SSL certs | /etc/letsencrypt/live/crm.icaweb.in/ |
+
+---
+
+## 🔧 Troubleshooting
 
 | Problem | Solution |
-|---------|----------|
-| `DATABASE_URL must be set` | Copy `.env.example` → `.env` and fill values |
-| Logo not loading | Copy `attached_assets/ica-logo*.jpg` → `client/public/` |
-| App not starting on VPS | `pm2 logs ica-crm` to see errors |
-| SSL certificate error | `sudo certbot renew` (expires every 90 days) |
-| Git push rejected | Use Personal Access Token, not GitHub password |
-| Rate limit 429 error | Expected — client retries after 15 minutes |
-| OpenAI not working | Check `OPENAI_API_KEY` in `.env` and billing credits |
+|---------|---------|
+| Site not loading | `pm2 status` → `pm2 restart all` |
+| Login failing (CORS) | Check ALLOWED_ORIGINS in .env |
+| App crashing (SESSION_SECRET) | Ensure SESSION_SECRET is 32+ chars |
+| AI Proceeding job not found | DB-backed jobs fix deployed — check pm2 status |
+| Nginx 502 Bad Gateway | `pm2 restart all`, check `pm2 logs` |
+| SSL expired | `certbot renew` → `systemctl reload nginx` |
+| DB connection failed | Check DATABASE_URL in .env |
+| Emails not sending | Check RESEND_API_KEY in .env, check pm2 logs |
+| Git push rejected | Use Personal Access Token, not password |
 
 ---
 
-## 🔮 FUTURE FEATURES (Backlog)
+## 📦 RC API (Pending)
+- Provider: Surepass — ₹2.25/hit, min ₹25,000 deposit
+- Once received: Add `RC_API_KEY` to .env → `pm2 restart all`
 
-| Feature | Notes |
-|---------|-------|
-| RC Vehicle Lookup | Use Surepass API (₹2-3/lookup) — reverted from RapidAPI |
-| WhatsApp Integration | Send lead updates via WhatsApp Business API |
-| Email Notifications | Follow-up reminders via SMTP |
-| Mobile App | React Native wrapper |
-| Advanced Analytics | Custom date range reports |
-| Data Export (PDF) | PDF report generation |
+## 📞 Exotel Voice (Phase 2)
+- Plan: Believer — ₹23,599 GST incl., 12 months, 6 agents, ₹9.5k balance
+- Call rate: 60 paise/minute
 
 ---
 
-## 📞 CONTACTS & ACCOUNTS
+## 🔮 Future Roadmap
 
-| Service | Account | Notes |
-|---------|---------|-------|
-| GitHub | icassameer | icacrmweb.in repo |
-| Domain | GoDaddy | icaweb.in |
-| VPS | Hetzner (pending) | Need Niyo/Scapia card |
-| OpenAI | (pending) | Need $10 credits |
-| Support | +91 9967969850 | ICA team |
+| Phase | Feature | Timeline |
+|-------|---------|---------|
+| Immediate | RC Lookup go-live (Surepass key) | Pending payment |
+| Immediate | Privacy policy page /privacy-policy | 1-2 weeks |
+| Immediate | Auto-reply on support@icaweb.in | 1-2 weeks |
+| Phase 2 | Exotel voice call integration | 1-3 months |
+| Phase 2 | WhatsApp Business API | 1-3 months |
+| Phase 2 | Mobile app (React Native) | 1-3 months |
+| Phase 3 | Payment gateway (auto billing) | 3-6 months |
+| Phase 3 | Custom domain per agency | 3-6 months |
+| Phase 3 | Multi-language UI (Hindi) | 3-6 months |
 
 ---
 
-*Last updated: March 2026 | Version: 2.0 | Status: Security hardened, pending VPS deployment*
+## 📋 Version History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| v4.0 | March 2026 | Resend email integration, plan upgrade email, VS Code SSH, fontSrc fix, .gitignore cleanup, TEAM_LEADER role correction |
+| v3.0 | March 2026 | RC Lookup UI, plan limits, WhatsApp, VPS deployment, Nginx + SSL |
+| v2.0 | Feb 2026 | Security hardening, AI Proceeding, performance engine |
+| v1.0 | Jan 2026 | Initial release — lead management, 4 roles, JWT auth |
+
+---
+
+*Last updated: March 2026 | Sameer | ICA — Innovation, Consulting & Automation*
