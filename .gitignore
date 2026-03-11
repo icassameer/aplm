@@ -37,3 +37,4 @@ Thumbs.db
 replit.nix
 .upm/
 .config/
+.env.save*

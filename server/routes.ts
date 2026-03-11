@@ -887,12 +887,20 @@ export async function registerRoutes(
             ENTERPRISE: { leadLimit: 10000, userLimit: 200 },
           };
           const limits = planLimits[request.requestedPlan] || planLimits.BASIC;
-          await storage.updateAgency(agency.id, {
+        await storage.updateAgency(agency.id, {
             plan: request.requestedPlan,
             leadLimit: limits.leadLimit,
             userLimit: limits.userLimit,
             planAssignedAt: new Date(),
           });
+          // Send plan upgrade email to agency admin
+          const agencyAdmin = await storage.getUsersByAgency(agency.agencyCode);
+          const admin = agencyAdmin.find(u => u.role === "AGENCY_ADMIN");
+          if (admin?.email) {
+            sendPlanUpgradeEmail(admin.email, admin.fullName, agency.plan, request.requestedPlan).catch(err =>
+              console.error("Plan upgrade email failed:", err.message)
+            );
+          }
         }
       }
 
