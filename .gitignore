@@ -38,3 +38,4 @@ replit.nix
 .upm/
 .config/
 .env.save*
+*.bak
