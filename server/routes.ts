@@ -393,7 +393,7 @@ export async function registerRoutes(
       const { password: _, ...safeUser } = user;
 
       // Send welcome email if email provided and agency exists
-      if (email && agencyCode) {
+      if (email && agencyCode && role === "AGENCY_ADMIN") {
         const agency = await storage.getAgencyByCode(agencyCode);
         if (agency) {
           sendWelcomeEmail(email, fullName, username, agency.plan, agency.name).catch(err =>
