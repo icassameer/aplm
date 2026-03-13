@@ -289,6 +289,48 @@ export async function registerRoutes(
         remarks: `User approved by ${req.user!.role}${updateData.role ? ` as ${updateData.role}` : ''}`, targetUserId: req.params.id,
       });
 
+      // Send welcome email to newly approved user
+      try {
+        const approvedUser = await storage.getUser(req.params.id);
+        if (approvedUser && approvedUser.email) {
+          const finalAgencyCode = approvedUser.agencyCode || updateData.agencyCode;
+          if (finalAgencyCode) {
+            const agency = await storage.getAgencyByCode(finalAgencyCode);
+            if (agency) {
+              sendWelcomeEmail(
+                approvedUser.email,
+                approvedUser.fullName,
+                approvedUser.username,
+                agency.plan,
+                agency.name
+              ).catch((err) => console.error("Welcome email failed:", err.message));
+            }
+          }
+        }
+      } catch (emailErr) {
+        console.error("Welcome email error:", emailErr);
+      }
+
+      // ── Send welcome email on approval ───────────────────────────────────
+      try {
+        const freshUser = await storage.getUser(req.params.id);
+        const finalAgencyCode = freshUser?.agencyCode || updateData.agencyCode;
+        if (freshUser?.email && finalAgencyCode) {
+          const agency = await storage.getAgencyByCode(finalAgencyCode);
+          if (agency) {
+            sendWelcomeEmail(
+              freshUser.email,
+              freshUser.fullName,
+              freshUser.username,
+              agency.plan,
+              agency.name
+            ).catch(err => console.error("Welcome email failed (non-blocking):", err.message));
+          }
+        }
+      } catch (emailErr: any) {
+        console.error("Welcome email error:", emailErr.message);
+      }
+
       res.json({ success: true, message: "User approved" });
     } catch (error: any) {
       console.error(error);
