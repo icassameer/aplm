@@ -272,6 +272,10 @@ export async function registerRoutes(
         return res.status(403).json({ success: false, message: "Cannot approve users from another agency" });
       }
 
+      // Prevent re-approval (idempotency guard)
+      if (targetUser.status === "ACTIVE") {
+      return res.json({ success: true, message: "User already approved" });
+      }
       const updateData: any = { status: "ACTIVE", isActive: true };
 
       if (req.user!.role === "MASTER_ADMIN") {
