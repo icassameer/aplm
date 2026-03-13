@@ -34,24 +34,28 @@
 | **Engine** | PostgreSQL 16 |
 | **Database** | ica_crm |
 | **User** | postgres |
-| **Password** | Admin@1234 |
-| **URL** | postgresql://postgres:Admin@1234@localhost:5432/ica_crm |
+| **Password** | IcaDb#Secure2026 |
+| **URL** | postgresql://postgres:IcaDb#Secure2026@localhost:5432/ica_crm |
 | **ORM** | Drizzle ORM |
+
+> ⚠️ DB password was rotated March 2026 after .env exposure incident. Use `sudo -u postgres psql` to access.
 
 ---
 
 ## ⚙️ Server .env
 
 ```
-SESSION_SECRET=IcaCrm@SecretKey2024@Sameer@321@ICA@CRM@SECURE
-DATABASE_URL=postgresql://postgres:Admin@1234@localhost:5432/ica_crm
+SESSION_SECRET=<rotated March 2026 — check server>
+DATABASE_URL=postgresql://postgres:IcaDb#Secure2026@localhost:5432/ica_crm
 OPENAI_API_KEY=<real key added>
 NODE_ENV=production
 ALLOWED_ORIGINS=https://crm.icaweb.in
-RESEND_API_KEY=<active — domain icaweb.in verified>
+RESEND_API_KEY=<rotated March 2026 — check server>
 FROM_EMAIL=support@icaweb.in
 RC_API_KEY=<pending — Surepass>
 ```
+
+> ⚠️ SESSION_SECRET and RESEND_API_KEY were rotated in March 2026. Always use `cat /var/www/ica-crm/.env` on server for current values.
 
 ---
 
@@ -121,6 +125,10 @@ RC_API_KEY=<pending — Surepass>
 | VS Code Remote SSH | ✅ | Configured on new PC |
 | fontSrc CSP fix | ✅ | Duplicate helmet directive removed |
 | .gitignore cleanup | ✅ | .env.save* excluded |
+| .env Nginx block | ✅ | Returns 404 — no public access |
+| Welcome email fix | ✅ | Sent only on direct MASTER_ADMIN creation |
+| DB password rotation | ✅ | March 2026 security incident response |
+| Resend API key rotation | ✅ | March 2026 security incident response |
 
 ---
 
@@ -130,11 +138,11 @@ RC_API_KEY=<pending — Surepass>
 |------|----------|-------|
 | RC API key (Surepass) | 🔴 High | ₹2.25/hit, min ₹25k deposit |
 | Update plan pricing in DB | 🔴 High | PRO=5500, ENTERPRISE=15000 |
+| Make GitHub repo private | 🔴 High | Currently public — exposes codebase |
 | Privacy policy page | 🟡 Medium | /privacy-policy route |
 | Auto-reply on support@icaweb.in | 🟡 Medium | Acknowledge incoming emails |
 | AI Proceeding accuracy | 🟡 Medium | Marathi/Hindi improvement |
 | Exotel voice integration | 🟡 Medium | Phase 2 |
-| Welcome email automation | ✅ Done | Auto-sent on user approval |
 
 ---
 
@@ -142,10 +150,12 @@ RC_API_KEY=<pending — Surepass>
 
 | Email Type | Trigger | Recipient |
 |-----------|---------|-----------|
-| Welcome Email | MASTER_ADMIN approves new agency user | New AGENCY_ADMIN |
+| Welcome Email | MASTER_ADMIN **directly creates** Agency Admin via Add Member | New AGENCY_ADMIN |
 | Prospect Inquiry | Manual via `/api/email/prospect` | Prospective client |
 | Plan Upgrade | MASTER_ADMIN approves upgrade request | Agency admin |
 | Password Reset | Not automated — share manually via WhatsApp | N/A |
+
+> ⚠️ **Important:** Welcome email fires on `POST /api/users` (direct creation) — NOT on the signup approval flow (`POST /api/users/approve/:id`). This is by design to avoid duplicate emails with the 2-instance PM2 cluster.
 
 > Domain `icaweb.in` is **verified** on Resend. All emails sent from `support@icaweb.in`.
 
@@ -175,14 +185,20 @@ pm2 logs ica-crm --lines 50
 # Deploy latest
 git pull origin master && npm run build && pm2 restart all
 
-# Edit .env
-nano /var/www/ica-crm/.env && pm2 restart all
+# Edit .env (always use --update-env after changing .env)
+nano /var/www/ica-crm/.env && pm2 restart all --update-env
 
 # DB access
-psql -U postgres -h localhost -d ica_crm
+sudo -u postgres psql -d ica_crm
 
 # SSL renew
 certbot renew
+
+# Test Resend API
+curl -s https://api.resend.com/emails \
+  -H "Authorization: Bearer $(grep RESEND_API_KEY /var/www/ica-crm/.env | cut -d= -f2)" \
+  -H "Content-Type: application/json" \
+  -d '{"from":"support@icaweb.in","to":"test@gmail.com","subject":"Test","html":"<p>Test</p>"}'
 ```
 
 ---
@@ -215,6 +231,12 @@ certbot renew
 | Seed endpoint blocked in production | ✅ Active |
 | Audit logs for all sensitive actions | ✅ Active |
 | .env.save* excluded from git | ✅ Fixed |
+| .env blocked in Nginx (returns 404) | ✅ Fixed March 2026 |
+| SESSION_SECRET rotated | ✅ March 2026 |
+| DB password rotated | ✅ March 2026 |
+| Resend API key rotated | ✅ March 2026 |
+
+> ⚠️ **Incident — March 2026:** `/api/.env` was publicly accessible (returned 200). Credentials exposed. All secrets rotated. Nginx block added. GitHub repo should be made **private** immediately.
 
 ---
 
@@ -228,6 +250,7 @@ certbot renew
 | Storage layer | server/storage.ts |
 | Audio/AI client | server/replit_integrations/audio/client.ts |
 | Frontend pages | client/src/pages/ |
+| Approvals page | client/src/pages/approvals.tsx |
 | Sidebar nav | client/src/components/app-sidebar.tsx |
 | PM2 config | ecosystem.config.cjs |
 | Nginx config | /etc/nginx/sites-enabled/ica-crm |
@@ -245,15 +268,17 @@ certbot renew
 | AI Proceeding job not found | DB-backed jobs fix deployed — check pm2 status |
 | Nginx 502 Bad Gateway | `pm2 restart all`, check `pm2 logs` |
 | SSL expired | `certbot renew` → `systemctl reload nginx` |
-| DB connection failed | Check DATABASE_URL in .env |
-| Emails not sending | Check RESEND_API_KEY in .env, check pm2 logs |
+| DB connection failed | Check DATABASE_URL in .env; use `sudo -u postgres psql` not `psql -U postgres` |
+| Emails not sending | Check RESEND_API_KEY in .env, test with curl command above |
 | Git push rejected | Use Personal Access Token, not password |
+| .env exposed (returns 200) | Add Nginx location block to deny .env files |
+| Duplicate welcome emails | Do NOT add email calls to approve route — only fires on direct creation |
 
 ---
 
 ## 📦 RC API (Pending)
 - Provider: Surepass — ₹2.25/hit, min ₹25,000 deposit
-- Once received: Add `RC_API_KEY` to .env → `pm2 restart all`
+- Once received: Add `RC_API_KEY` to .env → `pm2 restart all --update-env`
 
 ## 📞 Exotel Voice (Phase 2)
 - Plan: Believer — ₹23,599 GST incl., 12 months, 6 agents, ₹9.5k balance
@@ -268,6 +293,7 @@ certbot renew
 | Immediate | RC Lookup go-live (Surepass key) | Pending payment |
 | Immediate | Privacy policy page /privacy-policy | 1-2 weeks |
 | Immediate | Auto-reply on support@icaweb.in | 1-2 weeks |
+| Immediate | Make GitHub repo private | ASAP |
 | Phase 2 | Exotel voice call integration | 1-3 months |
 | Phase 2 | WhatsApp Business API | 1-3 months |
 | Phase 2 | Mobile app (React Native) | 1-3 months |
@@ -281,6 +307,7 @@ certbot renew
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v4.1 | March 2026 | Security hardening (.env block, credential rotation), welcome email fix (direct creation only, no duplicates), DB password rotation |
 | v4.0 | March 2026 | Resend email integration, plan upgrade email, VS Code SSH, fontSrc fix, .gitignore cleanup, TEAM_LEADER role correction |
 | v3.0 | March 2026 | RC Lookup UI, plan limits, WhatsApp, VPS deployment, Nginx + SSL |
 | v2.0 | Feb 2026 | Security hardening, AI Proceeding, performance engine |
