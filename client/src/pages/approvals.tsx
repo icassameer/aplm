@@ -37,6 +37,7 @@ export default function ApprovalsPage() {
     enabled: isMaster,
   });
 
+  const [approvedIds, setApprovedIds] = useState<Set<string>>(new Set());
   const approveMutation = useMutation({
     mutationFn: async (userId: string) => {
       const body: any = {};
@@ -53,7 +54,8 @@ export default function ApprovalsPage() {
       if (!data.success) throw new Error(data.message);
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_, userId) => {
+      setApprovedIds(prev => new Set(prev).add(userId));
       toast({ title: "Success", description: "User approved successfully" });
       queryClient.invalidateQueries({ queryKey: ["/api/users/pending"] });
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
@@ -195,8 +197,8 @@ export default function ApprovalsPage() {
                   <Button
                     size="sm"
                     className="flex-1"
-                    onClick={() => approveMutation.mutate(u.id)}
-                    disabled={approveMutation.isPending || (isMaster && !approvalData[u.id]?.agencyCode)}
+                    onClick={() => { if (!approvedIds.has(u.id)) approveMutation.mutate(u.id); }}
+                    disabled={approveMutation.isPending || approvedIds.has(u.id) || (isMaster && !approvalData[u.id]?.agencyCode)}
                     data-testid={`button-approve-${u.id}`}
                   >
                     <UserCheck className="w-4 h-4 mr-1" />
