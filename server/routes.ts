@@ -1,4 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
+import express from "express";
+import Razorpay from "razorpay";
+import crypto from "crypto";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from "bcryptjs";
@@ -12,7 +15,9 @@ import { z } from "zod";
 import type { User } from "@shared/schema";
 import { loginSchema, signUpSchema, roleEnum, planEnum, leadStatusEnum } from "@shared/schema";
 import { openai, speechToText, transcribeLargeAudio, ensureCompatibleFormat } from "./replit_integrations/audio/client";
-import { sendWelcomeEmail, sendProspectEmail, sendPasswordResetEmail, sendPlanUpgradeEmail } from "./email";
+import { sendWelcomeEmail, sendProspectEmail, sendPasswordResetEmail, sendPlanUpgradeEmail, sendPaymentLinkEmail,
+  sendPaymentSuccessEmail,
+} from "./email";
 
 // ─── Validation helpers ────────────────────────────────────────────────────────
 function validate<T>(schema: z.ZodSchema<T>, data: unknown): { data: T } | { error: string } {
@@ -29,6 +34,20 @@ function sanitizeString(str: string): string {
 }
 
 const JWT_SECRET = process.env.SESSION_SECRET!;
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID!,
+  key_secret: process.env.RAZORPAY_KEY_SECRET!,
+});
+const PLAN_PRICES: Record<string, number> = {
+  BASIC: 250000,
+  PRO: 550000,
+  ENTERPRISE: 1200000,
+};
+const PLAN_LIMITS: Record<string, { leadLimit: number; userLimit: number }> = {
+  BASIC: { leadLimit: 500, userLimit: 5 },
+  PRO: { leadLimit: 2000, userLimit: 10 },
+  ENTERPRISE: { leadLimit: 10000, userLimit: 25 },
+};
 // Multer with file type validation
 const ALLOWED_AUDIO_TYPES = ["audio/mpeg", "audio/wav", "audio/mp4", "audio/ogg", "audio/webm", "audio/m4a", "video/mp4"];
 const ALLOWED_SHEET_TYPES = [
@@ -1784,6 +1803,162 @@ Return ONLY valid JSON, no markdown, no explanation.`
       res.status(500).json({ success: false, message: "Internal server error" });
     }
   });
+
+  // ── Payment Routes ────────────────────────────────────────────────────────
+
+  // POST /api/payments/create-order
+  app.post("/api/payments/create-order", authMiddleware, roleMiddleware("AGENCY_ADMIN", "MASTER_ADMIN"), async (req: AuthRequest, res: Response) => {
+    try {
+      const { plan, agencyCode: targetAgencyCode } = req.body;
+      if (!plan || !PLAN_PRICES[plan]) {
+        return res.status(400).json({ success: false, message: "Invalid plan" });
+      }
+      const agencyCode = req.user!.role === "MASTER_ADMIN" ? targetAgencyCode : req.user!.agencyCode!;
+      if (!agencyCode) return res.status(400).json({ success: false, message: "Agency code required" });
+      const agency = await storage.getAgencyByCode(agencyCode);
+      if (!agency) return res.status(404).json({ success: false, message: "Agency not found" });
+      const amount = PLAN_PRICES[plan];
+      const order = await razorpay.orders.create({
+        amount,
+        currency: "INR",
+        receipt: `ica_${agencyCode}_${Date.now()}`,
+        notes: { agencyCode, plan, agencyName: agency.name },
+      });
+      await storage.createPayment({
+        agencyCode,
+        razorpayOrderId: order.id,
+        amount,
+        currency: "INR",
+        plan,
+        status: "CREATED",
+        createdBy: req.user!.id,
+      });
+      res.json({ success: true, data: { orderId: order.id, amount, currency: "INR", keyId: process.env.RAZORPAY_KEY_ID, agencyName: agency.name, plan } });
+    } catch (error: any) {
+      console.error("Create order error:", error);
+      res.status(500).json({ success: false, message: "Failed to create payment order" });
+    }
+  });
+
+  // POST /api/payments/verify
+  app.post("/api/payments/verify", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+      const body = razorpay_order_id + "|" + razorpay_payment_id;
+      const expectedSignature = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!).update(body).digest("hex");
+      if (expectedSignature !== razorpay_signature) {
+        return res.status(400).json({ success: false, message: "Invalid payment signature" });
+      }
+      const payment = await storage.getPaymentByOrderId(razorpay_order_id);
+      if (!payment) return res.status(404).json({ success: false, message: "Order not found" });
+      await storage.updatePayment(razorpay_order_id, {
+        razorpayPaymentId: razorpay_payment_id,
+        razorpaySignature: razorpay_signature,
+        status: "PAID",
+        updatedAt: new Date(),
+      });
+      const agency = await storage.getAgencyByCode(payment.agencyCode);
+      if (agency) {
+        const limits = PLAN_LIMITS[payment.plan] || {};
+        await storage.updateAgency(agency.id, { plan: payment.plan, ...limits, planAssignedAt: new Date() });
+        try {
+          const agencyUsers = await storage.getUsersByAgency(payment.agencyCode);
+          const adminUser = agencyUsers.find((u: any) => u.role === "AGENCY_ADMIN");
+          if (adminUser?.email) {
+            await sendPaymentSuccessEmail(adminUser.email, adminUser.fullName, payment.plan, payment.amount / 100, razorpay_payment_id);
+          }
+        } catch (emailErr) { console.error("Payment email failed:", emailErr); }
+        await storage.createAuditLog({
+          agencyCode: payment.agencyCode, leadId: null, userId: req.user!.id,
+          action: "PLAN_UPGRADED_VIA_PAYMENT", oldStatus: agency.plan, newStatus: payment.plan,
+          remarks: `Payment ID: ${razorpay_payment_id} | Amount: Rs.${payment.amount / 100}`,
+          targetUserId: null,
+        });
+      }
+      res.json({ success: true, message: "Payment verified and plan upgraded" });
+    } catch (error: any) {
+      console.error("Verify error:", error);
+      res.status(500).json({ success: false, message: "Payment verification failed" });
+    }
+  });
+
+  // POST /api/payments/webhook
+  app.post("/api/payments/webhook", express.raw({ type: "application/json" }), async (req: Request, res: Response) => {
+    try {
+      const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET!;
+      const signature = req.headers["x-razorpay-signature"] as string;
+      const expectedSignature = crypto.createHmac("sha256", webhookSecret).update(req.body).digest("hex");
+      if (expectedSignature !== signature) {
+        return res.status(400).json({ success: false, message: "Invalid webhook signature" });
+      }
+      const event = JSON.parse(req.body.toString());
+      if (event.event === "payment.captured") {
+        const paymentEntity = event.payload.payment.entity;
+        const orderId = paymentEntity.order_id;
+        const payment = await storage.getPaymentByOrderId(orderId);
+        if (payment && payment.status !== "PAID") {
+          await storage.updatePayment(orderId, { razorpayPaymentId: paymentEntity.id, status: "PAID", updatedAt: new Date() });
+          const agency = await storage.getAgencyByCode(payment.agencyCode);
+          if (agency) {
+            const limits = PLAN_LIMITS[payment.plan] || {};
+            await storage.updateAgency(agency.id, { plan: payment.plan, ...limits, planAssignedAt: new Date() });
+            console.log("Webhook: Plan upgraded for", payment.agencyCode, "to", payment.plan);
+          }
+        }
+      }
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Webhook error:", error);
+      res.status(500).json({ success: false });
+    }
+  });
+
+  // POST /api/payments/send-link — Master Admin sends payment link to agency
+  app.post("/api/payments/send-link", authMiddleware, roleMiddleware("MASTER_ADMIN"), async (req: AuthRequest, res: Response) => {
+    try {
+      const { agencyCode, plan } = req.body;
+      if (!agencyCode || !plan) return res.status(400).json({ success: false, message: "Agency and plan required" });
+      const agency = await storage.getAgencyByCode(agencyCode);
+      if (!agency) return res.status(404).json({ success: false, message: "Agency not found" });
+      const amount = PLAN_PRICES[plan];
+      const order = await razorpay.orders.create({
+        amount, currency: "INR",
+        receipt: `ica_${agencyCode}_${Date.now()}`,
+        notes: { agencyCode, plan, agencyName: agency.name },
+      });
+      await storage.createPayment({ agencyCode, razorpayOrderId: order.id, amount, currency: "INR", plan, status: "CREATED", createdBy: req.user!.id });
+      const agencyUsers = await storage.getUsersByAgency(agencyCode);
+      const adminUser = agencyUsers.find((u: any) => u.role === "AGENCY_ADMIN");
+      if (adminUser?.email) {
+        const paymentUrl = `https://crm.icaweb.in/payment?orderId=${order.id}&plan=${plan}&amount=${amount}`;
+        await sendPaymentLinkEmail(adminUser.email, adminUser.fullName, plan, amount / 100, paymentUrl);
+      }
+      res.json({ success: true, message: "Payment link sent to agency admin email" });
+    } catch (error: any) {
+      console.error("Send link error:", error);
+      res.status(500).json({ success: false, message: "Failed to send payment link" });
+    }
+  });
+
+  // GET /api/payments — payment history
+  app.get("/api/payments", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      if (req.user!.role === "MASTER_ADMIN") {
+        const all = await storage.getAllPayments();
+        const allAgencies = await storage.getAllAgencies();
+        const agencyMap: Record<string, string> = {};
+        for (const a of allAgencies) { agencyMap[a.agencyCode] = a.name; }
+        const enriched = all.map((p: any) => ({ ...p, agencyName: agencyMap[p.agencyCode] || p.agencyCode }));
+        return res.json({ success: true, data: enriched });
+      }
+      const records = await storage.getPaymentsByAgency(req.user!.agencyCode!);
+      res.json({ success: true, data: records });
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
 
   return httpServer;
 }

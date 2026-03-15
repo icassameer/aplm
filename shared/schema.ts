@@ -146,6 +146,27 @@ export const rcRecords = pgTable("rc_records", {
 
 export { conversations, messages } from "./models/chat";
 
+
+export const payments = pgTable("payments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  agencyCode: text("agency_code").notNull(),
+  razorpayOrderId: text("razorpay_order_id").notNull().unique(),
+  razorpayPaymentId: text("razorpay_payment_id"),
+  amount: integer("amount").notNull(),
+  currency: text("currency").notNull().default("INR"),
+  plan: text("plan").notNull(),
+  status: text("status").notNull().default("PENDING"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("payments_agency_idx").on(table.agencyCode),
+  index("payments_status_idx").on(table.status),
+  index("payments_order_idx").on(table.razorpayOrderId),
+]);
+
+export type Payment = typeof payments.$inferSelect;
+export type InsertPayment = typeof payments.$inferInsert;
+
 export const insertAgencySchema = createInsertSchema(agencies).omit({ id: true, createdAt: true, planAssignedAt: true });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true });

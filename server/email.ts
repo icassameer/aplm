@@ -227,3 +227,67 @@ export async function sendPlanUpgradeEmail(
 
   return sendEmail(to, `ICA CRM — Plan Upgraded to ${newPlan}!`, baseTemplate(content));
 }
+
+export async function sendPaymentLinkEmail(
+  to: string, name: string, plan: string, amount: number, paymentUrl: string
+): Promise<void> {
+  await resend.emails.send({
+    from: FROM_EMAIL,
+    to,
+    subject: `ICA CRM — Complete Your ${plan} Plan Payment`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:20px">
+        <div style="background:#1e3a5f;padding:24px;border-radius:8px 8px 0 0;text-align:center">
+          <h1 style="color:white;margin:0;font-size:24px">ICA CRM</h1>
+          <p style="color:#94a3b8;margin:4px 0 0">Innovation, Consulting & Automation</p>
+        </div>
+        <div style="background:white;padding:32px;border-radius:0 0 8px 8px">
+          <h2 style="color:#1e3a5f">Hello ${name},</h2>
+          <p style="color:#475569">Your <strong>${plan} Plan</strong> payment of <strong>Rs.${amount.toLocaleString()}/month</strong> is ready.</p>
+          <div style="background:#f1f5f9;border-radius:8px;padding:16px;margin:20px 0">
+            <p style="margin:0;color:#475569"><strong>Plan:</strong> ${plan}</p>
+            <p style="margin:8px 0 0;color:#475569"><strong>Amount:</strong> Rs.${amount.toLocaleString()}/month</p>
+          </div>
+          <a href="${paymentUrl}" style="display:inline-block;background:#1e3a5f;color:white;padding:12px 32px;border-radius:6px;text-decoration:none;font-weight:bold;margin:16px 0">
+            Complete Payment Now
+          </a>
+          <p style="color:#94a3b8;font-size:12px;margin-top:24px">Link expires in 24 hours. Need help? Contact support@icaweb.in</p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+export async function sendPaymentSuccessEmail(
+  to: string, name: string, plan: string, amount: number, paymentId: string
+): Promise<void> {
+  await resend.emails.send({
+    from: FROM_EMAIL,
+    to,
+    subject: `ICA CRM — Payment Successful! ${plan} Plan Activated`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:20px">
+        <div style="background:#1e3a5f;padding:24px;border-radius:8px 8px 0 0;text-align:center">
+          <h1 style="color:white;margin:0;font-size:24px">ICA CRM</h1>
+          <p style="color:#94a3b8;margin:4px 0 0">Innovation, Consulting & Automation</p>
+        </div>
+        <div style="background:white;padding:32px;border-radius:0 0 8px 8px;text-align:center">
+          <div style="background:#dcfce7;border-radius:50%;width:64px;height:64px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px">
+            <span style="font-size:32px">&#10003;</span>
+          </div>
+          <h2 style="color:#16a34a">Payment Successful!</h2>
+          <p style="color:#475569">Your <strong>${plan} Plan</strong> is now active.</p>
+          <div style="background:#f1f5f9;border-radius:8px;padding:16px;margin:20px 0;text-align:left">
+            <p style="margin:0;color:#475569"><strong>Plan:</strong> ${plan}</p>
+            <p style="margin:8px 0 0;color:#475569"><strong>Amount Paid:</strong> Rs.${amount.toLocaleString()}</p>
+            <p style="margin:8px 0 0;color:#475569"><strong>Payment ID:</strong> ${paymentId}</p>
+          </div>
+          <a href="https://crm.icaweb.in" style="display:inline-block;background:#1e3a5f;color:white;padding:12px 32px;border-radius:6px;text-decoration:none;font-weight:bold;">
+            Go to Dashboard
+          </a>
+          <p style="color:#94a3b8;font-size:12px;margin-top:24px">Save this email as your receipt. Need help? support@icaweb.in</p>
+        </div>
+      </div>
+    `,
+  });
+}

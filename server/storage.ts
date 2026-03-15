@@ -1,7 +1,7 @@
 import { eq, and, or, desc, asc, count, sql, ilike, isNull, isNotNull, lt } from "drizzle-orm";
 import { db } from "./db";
 import {
-  agencies, users, leads, auditLogs, meetings, services, upgradeRequests, rcRecords, processingJobs,
+  agencies, users, leads, auditLogs, meetings, services, upgradeRequests, rcRecords, processingJobs, payments, payments,
   type Agency, type InsertAgency,
   type User, type InsertUser,
   type Lead, type InsertLead,
@@ -11,6 +11,8 @@ import {
   type RcRecord, type InsertRcRecord,
   type ProcessingJob
 } from "@shared/schema";
+
+import type { Payment, InsertPayment } from "@shared/schema";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -70,6 +72,11 @@ export interface IStorage {
   getRcRecordsByAgency(agencyCode: string): Promise<RcRecord[]>;
   getAllRcRecords(): Promise<RcRecord[]>;
   deleteRcRecord(id: string): Promise<void>;
+  createPayment(data: InsertPayment): Promise<Payment>;
+  getPaymentByOrderId(orderId: string): Promise<Payment | undefined>;
+  getPaymentsByAgency(agencyCode: string): Promise<Payment[]>;
+  updatePayment(orderId: string, data: Partial<Payment>): Promise<Payment | undefined>;
+  getAllPayments(): Promise<Payment[]>;
   getRcRecordByNumber(agencyCode: string, rcNumber: string): Promise<RcRecord | undefined>;
 
   // Processing jobs
@@ -495,6 +502,25 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJob(id: string): Promise<void> {
     await db.delete(processingJobs).where(eq(processingJobs.id, id));
+  }
+
+  async createPayment(data: InsertPayment): Promise<Payment> {
+    const [record] = await db.insert(payments).values(data).returning();
+    return record;
+  }
+  async getPaymentByOrderId(orderId: string): Promise<Payment | undefined> {
+    const [record] = await db.select().from(payments).where(eq(payments.razorpayOrderId, orderId));
+    return record;
+  }
+  async getPaymentsByAgency(agencyCode: string): Promise<Payment[]> {
+    return db.select().from(payments).where(eq(payments.agencyCode, agencyCode)).orderBy(desc(payments.createdAt));
+  }
+  async updatePayment(orderId: string, data: Partial<Payment>): Promise<Payment | undefined> {
+    const [record] = await db.update(payments).set(data).where(eq(payments.razorpayOrderId, orderId)).returning();
+    return record;
+  }
+  async getAllPayments(): Promise<Payment[]> {
+    return db.select().from(payments).orderBy(desc(payments.createdAt));
   }
 }
 

@@ -1,16 +1,32 @@
+import { CreditCard } from "lucide-react";
 import { useState } from "react";
+import { CreditCard } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { CreditCard } from "lucide-react";
 import { useApi } from "@/hooks/use-api";
+import { CreditCard } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { CreditCard } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CreditCard } from "lucide-react";
+import { useLocation } from "wouter";
+import { CreditCard } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { CreditCard } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CreditCard } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { CreditCard } from "lucide-react";
 import { Label } from "@/components/ui/label";
+import { CreditCard } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { CreditCard } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { CreditCard } from "lucide-react";
 import { ArrowUpCircle, CheckCircle2, XCircle, Clock, Building2 } from "lucide-react";
 
 const planOrder = ["BASIC", "PRO", "ENTERPRISE"];
@@ -25,7 +41,14 @@ const statusColors: Record<string, string> = {
   DENIED: "bg-red-100 text-red-700 border-red-200",
 };
 
+const PLAN_PRICES: Record<string, number> = {
+  BASIC: 250000,
+  PRO: 550000,
+  ENTERPRISE: 1200000,
+};
+
 export default function UpgradeRequestsPage() {
+  const [, setLocation] = useLocation();
   const { user, token } = useAuth();
   const { apiFetch } = useApi();
   const { toast } = useToast();
@@ -134,6 +157,20 @@ export default function UpgradeRequestsPage() {
       {!isMaster && availableUpgrades.length > 0 && (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
+            <Button
+              variant="default"
+              className="gap-2 bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => {
+                const nextPlan = availableUpgrades[0];
+                if (nextPlan) {
+                  setLocation(`/payment?plan=${nextPlan}&amount=${PLAN_PRICES[nextPlan]}`);
+                }
+              }}
+              disabled={availableUpgrades.length === 0}
+            >
+              <CreditCard className="w-4 h-4" />
+              Pay & Upgrade Now
+            </Button>
             <Button data-testid="button-request-upgrade">
               <ArrowUpCircle className="w-4 h-4 mr-2" />
               Request Plan Upgrade

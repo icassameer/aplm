@@ -25,6 +25,7 @@ import ReportsPage from "@/pages/reports";
 import ServicesPage from "@/pages/services";
 import UpgradeRequestsPage from "@/pages/upgrade-requests";
 import RCLookupPage from "@/pages/rc-lookup";
+import PaymentPage from "@/pages/payment";
 
 function ProtectedRoute({ component: Component, allowedRoles }: { component: any; allowedRoles?: string[] }) {
   const { user, isLoading } = useAuth();
@@ -131,6 +132,7 @@ function AuthenticatedLayout() {
     return (
       <Switch>
         <Route path="/login" component={LoginPage} />
+            <Route path="/payment" component={PaymentPage} />
         <Route><Redirect to="/login" /></Route>
       </Switch>
     );
@@ -207,6 +209,7 @@ function App() {
         <AuthProvider>
           <Switch>
             <Route path="/login" component={LoginPage} />
+            <Route path="/payment" component={PaymentPage} />
             <Route>
               <AuthenticatedLayout />
             </Route>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useApi } from "@/hooks/use-api";
+import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Building2, Plus, Users, Phone, Crown, Trash2 } from "lucide-react";
 
 export default function AgenciesPage() {
+  const [, setLocation] = useLocation();
   const { apiFetch } = useApi();
   const { toast } = useToast();
   const queryClient = useQueryClient();
