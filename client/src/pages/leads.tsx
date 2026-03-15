@@ -465,7 +465,17 @@ export default function LeadsPage() {
                             )}
                           </div>
                           <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5 flex-wrap">
-                            <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{lead.phone}</span>
+                            {user?.role === "TELE_CALLER" ? (
+                              <a
+                                href={"tel:" + lead.phone}
+                                className="flex items-center gap-1 text-primary font-medium hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Phone className="w-3 h-3" />{lead.phone}
+                              </a>
+                            ) : (
+                              <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{lead.phone}</span>
+                            )}
                             <a
                               href={`https://wa.me/91${lead.phone.replace(/\D/g, "")}?text=${encodeURIComponent(
                                 `Hello ${lead.name},\n\nWe are reaching out regarding your enquiry${lead.service ? ` for *${lead.service}*` : ""}.\n\nWe would love to assist you. Please let us know a convenient time to connect.\n\nRegards,\nICA Team\n+91 9967969850`)}`}
