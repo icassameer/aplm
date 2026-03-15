@@ -275,7 +275,7 @@ async function transcribeWithSarvam(
       });
     });
 
-    // If under 25 seconds — send directly
+    // Sarvam hard limit: 30s per request — only send directly if under 25s
     if (duration <= 25) {
       return await callSarvamAPI(audioBuffer, format, languageCode, sarvamKey);
     }
@@ -289,7 +289,7 @@ async function transcribeWithSarvam(
       const ffmpeg = spawn("ffmpeg", [
         "-i", inputPath,
         "-f", "segment",
-        "-segment_time", "25",
+        "-segment_time", "25",   // 25s chunks — Sarvam API hard limit is 30s
         "-c:a", "libmp3lame",
         "-b:a", "128k",
         "-ar", "16000",
@@ -308,7 +308,7 @@ async function transcribeWithSarvam(
       .sort()
       .map(f => join(chunkDir, f));
 
-    console.log(`Sarvam: splitting ${Math.round(duration)}s audio into ${chunkFiles.length} chunks`);
+    console.log(`Sarvam: splitting ${Math.round(duration)}s into ${chunkFiles.length} x 4min chunks`);
 
     const transcripts: string[] = [];
     for (let i = 0; i < chunkFiles.length; i++) {

@@ -324,7 +324,7 @@ export default function MeetingsPage() {
                           <option value="kn">🇮🇳 Kannada</option>
                           <option value="bn">🇮🇳 Bengali</option>
                         </select>
-                        <p className="text-xs text-muted-foreground">Select language if auto-detect is incorrect</p>
+                        <p className="text-xs text-amber-500 font-medium">⚠️ For Hindi/Marathi audio, always select the language manually for best accuracy</p>
                       </div>
                     )}
                     <div className="space-y-2">

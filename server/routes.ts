@@ -1608,6 +1608,38 @@ Return ONLY valid JSON, no markdown, no explanation.`
     }
   });
 
+  // GET /api/rc-lookup — MASTER_ADMIN view all RC records across agencies
+  app.get("/api/rc-lookup", authMiddleware, roleMiddleware("MASTER_ADMIN"), async (req: AuthRequest, res: Response) => {
+    try {
+      const agencyFilter = req.query.agency as string | undefined;
+      let records: any[];
+      if (agencyFilter) {
+        records = await storage.getRcRecordsByAgency(agencyFilter);
+      } else {
+        records = await storage.getAllRcRecords();
+      }
+      const allAgencies = await storage.getAllAgencies();
+      const agencyMap: Record<string, string> = {};
+      for (const a of allAgencies) { agencyMap[a.agencyCode] = a.name; }
+      const enriched = records.map((r: any) => ({ ...r, agencyName: agencyMap[r.agencyCode] || r.agencyCode }));
+      return res.json({ success: true, data: enriched });
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // DELETE /api/rc-lookup/:id — MASTER_ADMIN delete RC record
+  app.delete("/api/rc-lookup/:id", authMiddleware, roleMiddleware("MASTER_ADMIN"), async (req: AuthRequest, res: Response) => {
+    try {
+      await storage.deleteRcRecord(req.params.id);
+      res.json({ success: true, message: "RC record deleted" });
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
   // GET /api/rc-records — get saved RC lookups for this agency
   app.get("/api/rc-records", authMiddleware, roleMiddleware("AGENCY_ADMIN", "TEAM_LEADER"), async (req: AuthRequest, res: Response) => {
     try {

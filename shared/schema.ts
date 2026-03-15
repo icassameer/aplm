@@ -198,3 +198,19 @@ export const processingJobs = pgTable("processing_jobs", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 export type ProcessingJob = typeof processingJobs.$inferSelect;
+
+export const rcLookups = pgTable("rc_lookups", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  agencyCode: text("agency_code").notNull(),
+  vehicleNumber: text("vehicle_number").notNull(),
+  result: text("result"),
+  status: text("status").notNull().default("SUCCESS"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("rc_lookups_agency_idx").on(table.agencyCode),
+  index("rc_lookups_created_idx").on(table.createdAt),
+]);
+
+export type RcLookup = typeof rcLookups.$inferSelect;
+export type InsertRcLookup = typeof rcLookups.$inferInsert;

@@ -68,6 +68,8 @@ export interface IStorage {
 
   createRcRecord(record: InsertRcRecord): Promise<RcRecord>;
   getRcRecordsByAgency(agencyCode: string): Promise<RcRecord[]>;
+  getAllRcRecords(): Promise<RcRecord[]>;
+  deleteRcRecord(id: string): Promise<void>;
   getRcRecordByNumber(agencyCode: string, rcNumber: string): Promise<RcRecord | undefined>;
 
   // Processing jobs
@@ -464,6 +466,12 @@ export class DatabaseStorage implements IStorage {
       .limit(50);
   }
 
+  async getAllRcRecords(): Promise<RcRecord[]> {
+    return await db.select().from(rcRecords).orderBy(desc(rcRecords.createdAt));
+  }
+  async deleteRcRecord(id: string): Promise<void> {
+    await db.delete(rcRecords).where(eq(rcRecords.id, id));
+  }
   async getRcRecordByNumber(agencyCode: string, rcNumber: string): Promise<RcRecord | undefined> {
     const [record] = await db.select().from(rcRecords)
       .where(and(eq(rcRecords.agencyCode, agencyCode), eq(rcRecords.rcNumber, rcNumber)));

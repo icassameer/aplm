@@ -1,22 +1,24 @@
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useApi } from "@/hooks/use-api";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
   Car, Search, User, Shield, FileText,
   Calendar, Building2, ChevronDown, ChevronUp,
-  Clock, AlertTriangle, CheckCircle2, XCircle, IndianRupee
+  Clock, AlertTriangle, CheckCircle2, XCircle, IndianRupee, Trash2
 } from "lucide-react";
 
 export default function RCLookupPage() {
   const { user } = useAuth();
+  const isMasterAdmin = user?.role === "MASTER_ADMIN";
   const isTeamLeader = user?.role === "TEAM_LEADER";
   const { apiFetch } = useApi();
   const { toast } = useToast();
@@ -25,10 +27,34 @@ export default function RCLookupPage() {
   const [expanded, setExpanded] = useState<string | null>("vehicle");
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [agencyFilter, setAgencyFilter] = useState("all");
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  const { data: agencies } = useQuery({
+    queryKey: ["/api/agencies"],
+    queryFn: () => apiFetch("/api/agencies"),
+    enabled: isMasterAdmin,
+  });
+  const agencyList = agencies?.data || [];
+
+  const recordsUrl = isMasterAdmin
+    ? agencyFilter !== "all" ? `/api/rc-lookup?agency=${agencyFilter}` : "/api/rc-lookup"
+    : "/api/rc-records";
 
   const { data: savedRecords, isLoading: recordsLoading } = useQuery({
-    queryKey: ["/api/rc-records"],
-    queryFn: () => apiFetch("/api/rc-records"),
+    queryKey: [recordsUrl],
+    queryFn: () => apiFetch(recordsUrl),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiFetch(`/api/rc-lookup/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/rc-lookup"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/rc-lookup?agency=${agencyFilter}`] });
+      setDeleteConfirm(null);
+      toast({ title: "RC record deleted successfully" });
+    },
+    onError: () => toast({ title: "Delete failed", variant: "destructive" }),
   });
 
   const handleLookup = async () => {
@@ -46,7 +72,7 @@ export default function RCLookupPage() {
       if (data.success) {
         setResult(data.data);
         queryClient.invalidateQueries({ queryKey: ["/api/rc-records"] });
-        toast({ title: "RC details fetched and saved!" });
+        toast({ title: data.cached ? "Returned from cache (within 24h)" : "RC details fetched and saved!" });
       } else {
         toast({ title: "Lookup failed", description: data.message, variant: "destructive" });
       }
@@ -77,17 +103,112 @@ export default function RCLookupPage() {
     <div className="flex flex-col gap-0.5">
       <span className="text-xs text-muted-foreground">{label}</span>
       <span className={`text-sm font-medium ${highlight ? "text-primary" : ""} ${!value || value === "NA" || value === "" ? "text-muted-foreground italic" : ""}`}>
-        {value && value !== "NA" && value !== "" ? String(value) : "—"}
+        {value && value !== "NA" && value !== "" ? String(value) : "\u2014"}
       </span>
     </div>
   );
 
   const r = result;
+  const records = savedRecords?.data || [];
+
+  if (isMasterAdmin) {
+    return (
+      <div className="p-6 space-y-6 max-w-5xl mx-auto">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+              <Car className="w-6 h-6 text-primary" />
+              RC Lookup \u2014 All Agencies
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">View and manage RC lookup history across all agencies</p>
+          </div>
+          <Badge variant="secondary" className="text-sm px-3 py-1">
+            {records.length} record{records.length !== 1 ? "s" : ""}
+          </Badge>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Building2 className="w-4 h-4 text-muted-foreground" />
+          <Select value={agencyFilter} onValueChange={setAgencyFilter}>
+            <SelectTrigger className="w-64">
+              <SelectValue placeholder="Filter by agency" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Agencies</SelectItem>
+              {agencyList.map((a: any) => (
+                <SelectItem key={a.agencyCode} value={a.agencyCode}>
+                  {a.name} ({a.agencyCode})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {agencyFilter !== "all" && (
+            <Button variant="ghost" size="sm" onClick={() => setAgencyFilter("all")}>Clear</Button>
+          )}
+        </div>
+
+        {recordsLoading ? (
+          <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
+        ) : records.length > 0 ? (
+          <div className="space-y-2">
+            {records.map((record: any) => (
+              <Card key={record.id} className="hover:border-primary/30 transition-colors">
+                <CardContent className="py-3 px-4">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <Car className="w-5 h-5 text-primary shrink-0" />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono font-bold text-primary">{record.rcNumber}</span>
+                          <Badge variant="outline" className="text-xs">{record.rcData?.vehicle_details?.fuel_type || "\u2014"}</Badge>
+                          <Badge variant="secondary" className="text-xs">{record.agencyName || record.agencyCode}</Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {record.rcData?.vehicle_details?.maker} {record.rcData?.vehicle_details?.model}
+                          {record.rcData?.owner_details?.name ? ` \u2022 Owner: ${record.rcData.owner_details.name}` : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Calendar className="w-3 h-3" />
+                        {new Date(record.createdAt).toLocaleDateString()}
+                      </div>
+                      {deleteConfirm === record.id ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-destructive font-medium">Delete?</span>
+                          <Button size="sm" variant="destructive" className="h-7 px-2 text-xs"
+                            onClick={() => deleteMutation.mutate(record.id)}
+                            disabled={deleteMutation.isPending}>Yes</Button>
+                          <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                            onClick={() => setDeleteConfirm(null)}>No</Button>
+                        </div>
+                      ) : (
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirm(record.id); }}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="py-12 text-center text-muted-foreground">
+              <Car className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">No RC lookup records found{agencyFilter !== "all" ? " for this agency" : ""}.</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
-
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Car className="w-6 h-6 text-primary" />
@@ -98,7 +219,6 @@ export default function RCLookupPage() {
         </p>
       </div>
 
-      {/* Search — Agency Admin only */}
       {!isTeamLeader && (
         <Card>
           <CardContent className="pt-6">
@@ -115,23 +235,19 @@ export default function RCLookupPage() {
                 />
               </div>
               <Button onClick={handleLookup} disabled={loading} className="gap-2" data-testid="button-rc-lookup">
-                {loading
-                  ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : <Search className="w-4 h-4" />}
+                {loading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Search className="w-4 h-4" />}
                 {loading ? "Fetching..." : "Fetch Details"}
               </Button>
             </div>
             <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
-              <p className="text-xs text-muted-foreground">⚠️ Each lookup uses API credits. Results are saved automatically.</p>
+              <p className="text-xs text-muted-foreground">\u26a0\ufe0f Each lookup uses API credits. Results are saved automatically.</p>
               {savedRecords?.meta && (
                 <div className="flex items-center gap-2 text-xs">
                   <span className="text-muted-foreground">This month:</span>
                   <Badge variant={savedRecords.meta.used >= savedRecords.meta.limit ? "destructive" : "secondary"} className="text-xs">
-                    {savedRecords.meta.used} / {savedRecords.meta.limit >= 9999999 ? "∞" : savedRecords.meta.limit} used
+                    {savedRecords.meta.used} / {savedRecords.meta.limit >= 9999999 ? "\u221e" : savedRecords.meta.limit} used
                   </Badge>
-                  {savedRecords.meta.plan && (
-                    <Badge variant="outline" className="text-xs">{savedRecords.meta.plan}</Badge>
-                  )}
+                  {savedRecords.meta.plan && <Badge variant="outline" className="text-xs">{savedRecords.meta.plan}</Badge>}
                 </div>
               )}
             </div>
@@ -139,7 +255,6 @@ export default function RCLookupPage() {
         </Card>
       )}
 
-      {/* Results */}
       {r && (
         <div className="space-y-3">
           <Card className="border-primary/20 bg-primary/5">
@@ -148,7 +263,7 @@ export default function RCLookupPage() {
                 <Car className="w-8 h-8 text-primary shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-lg">{r.vehicle_details?.maker} {r.vehicle_details?.model}</p>
-                  <p className="text-sm text-muted-foreground">{r.vehicle_details?.variant} • {r.vehicle_details?.color} • {r.vehicle_details?.fuel_type}</p>
+                  <p className="text-sm text-muted-foreground">{r.vehicle_details?.variant} \u2022 {r.vehicle_details?.color} \u2022 {r.vehicle_details?.fuel_type}</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <Badge className="bg-primary text-white font-mono text-sm px-3 py-1">{rcNumber}</Badge>
@@ -160,18 +275,16 @@ export default function RCLookupPage() {
               </div>
             </CardContent>
           </Card>
-
           <Section id="owner" title="Owner Details" icon={User}>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-2">
               <Field label="Owner Name" value={r.owner_details?.name} highlight />
-              <Field label="Father's Name" value={r.owner_details?.father_name} />
+              <Field label="Father s Name" value={r.owner_details?.father_name} />
               <Field label="Mobile" value={r.owner_details?.mobile} highlight />
               <Field label="Email" value={r.owner_details?.email} />
               <Field label="State" value={r.owner_details?.state} />
               <Field label="Address" value={r.owner_details?.present_address} />
             </div>
           </Section>
-
           <Section id="vehicle" title="Vehicle Details" icon={Car}>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-2">
               <Field label="Maker" value={r.vehicle_details?.maker} highlight />
@@ -192,7 +305,6 @@ export default function RCLookupPage() {
               <Field label="Unladen Weight" value={r.vehicle_details?.unladen_weight ? `${r.vehicle_details.unladen_weight} kg` : null} />
             </div>
           </Section>
-
           <Section id="insurance" title="Insurance Details" icon={Shield}>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-2">
               <Field label="Insurance Company" value={r.insurance_details?.insurance_company} highlight />
@@ -205,22 +317,19 @@ export default function RCLookupPage() {
               </div>
             )}
           </Section>
-
           <Section id="pucc" title="PUCC / Pollution Details" icon={FileText}>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-2">
               <Field label="PUCC Number" value={r.pucc_details?.pucc_no} />
               <Field label="Valid Upto" value={r.pucc_details?.pucc_upto} highlight />
             </div>
           </Section>
-
           <Section id="office" title="RTO Office" icon={Building2}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
               <Field label="RTO" value={r.office_details?.rto} highlight />
               <Field label="Registered At" value={r.office_details?.regn_at} />
             </div>
           </Section>
-
-          <Section id="financer" title="Financer & Additional" icon={IndianRupee}>
+          <Section id="financer" title="Financer and Additional" icon={IndianRupee}>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-2">
               <Field label="Financer Name" value={r.financer_details?.name} />
               <Field label="Is Financed" value={r.financer_details?.is_financed === true ? "Yes" : r.financer_details?.is_financed === false ? "No" : null} />
@@ -232,26 +341,17 @@ export default function RCLookupPage() {
         </div>
       )}
 
-      {/* Saved Records */}
       <div>
         <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
           <Clock className="w-5 h-5 text-muted-foreground" /> Previously Looked Up
         </h2>
         {recordsLoading ? (
           <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
-        ) : savedRecords?.data?.length > 0 ? (
+        ) : records.length > 0 ? (
           <div className="space-y-2">
-            {savedRecords.data.map((record: any) => (
-              <Card
-                key={record.id}
-                className="hover:border-primary/40 transition-colors cursor-pointer"
-                onClick={() => {
-                  setResult(record.rcData);
-                  setRcNumber(record.rcNumber);
-                  setExpanded("vehicle");
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }}
-              >
+            {records.map((record: any) => (
+              <Card key={record.id} className="hover:border-primary/40 transition-colors cursor-pointer"
+                onClick={() => { setResult(record.rcData); setRcNumber(record.rcNumber); setExpanded("vehicle"); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
                 <CardContent className="py-3 px-4">
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div className="flex items-center gap-3">
@@ -262,7 +362,7 @@ export default function RCLookupPage() {
                           <Badge variant="outline" className="text-xs">{record.rcData?.vehicle_details?.fuel_type}</Badge>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          {record.rcData?.vehicle_details?.maker} {record.rcData?.vehicle_details?.model} • Owner: {record.rcData?.owner_details?.name}
+                          {record.rcData?.vehicle_details?.maker} {record.rcData?.vehicle_details?.model} \u2022 Owner: {record.rcData?.owner_details?.name}
                         </p>
                       </div>
                     </div>

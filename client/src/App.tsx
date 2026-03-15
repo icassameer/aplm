@@ -183,13 +183,13 @@ function AuthenticatedLayout() {
                 <ProtectedRoute component={ReportsPage} allowedRoles={["AGENCY_ADMIN"]} />
               </Route>
               <Route path="/audit-logs">
-                <ProtectedRoute component={AuditLogsPage} allowedRoles={["AGENCY_ADMIN", "TEAM_LEADER"]} />
+                <ProtectedRoute component={AuditLogsPage} allowedRoles={["AGENCY_ADMIN", "TEAM_LEADER", "MASTER_ADMIN"]} />
               </Route>
               <Route path="/change-password">
                 <ProtectedRoute component={ChangePasswordPage} />
               </Route>
               <Route path="/rc-lookup">
-                <ProtectedRoute component={RCLookupPage} allowedRoles={["AGENCY_ADMIN", "TEAM_LEADER"]} />
+                <ProtectedRoute component={RCLookupPage} allowedRoles={["AGENCY_ADMIN", "TEAM_LEADER", "MASTER_ADMIN"]} />
               </Route>
               <Route component={NotFound} />
             </Switch>
