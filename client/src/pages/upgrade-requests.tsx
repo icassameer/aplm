@@ -1,33 +1,18 @@
-import { CreditCard } from "lucide-react";
 import { useState } from "react";
-import { CreditCard } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { CreditCard } from "lucide-react";
 import { useApi } from "@/hooks/use-api";
-import { CreditCard } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { CreditCard } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CreditCard } from "lucide-react";
 import { useLocation } from "wouter";
-import { CreditCard } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { CreditCard } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreditCard } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { CreditCard } from "lucide-react";
 import { Label } from "@/components/ui/label";
-import { CreditCard } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { CreditCard } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { CreditCard } from "lucide-react";
-import { ArrowUpCircle, CheckCircle2, XCircle, Clock, Building2 } from "lucide-react";
+import { ArrowUpCircle, CheckCircle2, XCircle, Clock, Building2, CreditCard } from "lucide-react";
 
 const planOrder = ["BASIC", "PRO", "ENTERPRISE"];
 const planColors: Record<string, string> = {
@@ -156,8 +141,7 @@ export default function UpgradeRequestsPage() {
 
       {!isMaster && availableUpgrades.length > 0 && (
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button
+          <Button
               variant="default"
               className="gap-2 bg-green-600 hover:bg-green-700 text-white"
               onClick={() => {
@@ -171,6 +155,7 @@ export default function UpgradeRequestsPage() {
               <CreditCard className="w-4 h-4" />
               Pay & Upgrade Now
             </Button>
+          <DialogTrigger asChild>
             <Button data-testid="button-request-upgrade">
               <ArrowUpCircle className="w-4 h-4 mr-2" />
               Request Plan Upgrade
