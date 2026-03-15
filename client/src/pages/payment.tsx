@@ -25,6 +25,7 @@ export default function PaymentPage() {
   const [, setLocation] = useLocation();
   const [loading, setLoading] = useState(false);
   const [paid, setPaid] = useState(false);
+  const [scriptLoaded, setScriptLoaded] = useState(false);
 
   const params = new URLSearchParams(window.location.search);
   const orderId = params.get("orderId");
@@ -32,10 +33,15 @@ export default function PaymentPage() {
   const amount = parseInt(params.get("amount") || "0");
 
   useEffect(() => {
+    if (window.Razorpay) { setScriptLoaded(true); return; }
     const script = document.createElement("script");
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => setScriptLoaded(true);
+    script.onerror = () => console.error("Razorpay script failed to load");
     document.body.appendChild(script);
-    return () => { document.body.removeChild(script); };
+    return () => {
+      if (document.body.contains(script)) document.body.removeChild(script);
+    };
   }, []);
 
   const handlePayment = async () => {
@@ -58,7 +64,7 @@ export default function PaymentPage() {
         currency: "INR",
         name: "ICA CRM",
         description: `${plan} Plan - Monthly Subscription`,
-        order_id: orderId || newOrderId,
+        order_id: newOrderId,
         prefill: { name: user?.fullName || "", email: user?.email || "" },
         theme: { color: "#1e3a5f" },
         handler: async (response: any) => {
@@ -84,6 +90,11 @@ export default function PaymentPage() {
         modal: { ondismiss: () => setLoading(false) },
       };
 
+      if (!window.Razorpay) {
+        toast({ title: "Payment gateway not loaded", description: "Please refresh and try again.", variant: "destructive" });
+        setLoading(false);
+        return;
+      }
       const rzp = new window.Razorpay(options);
       rzp.open();
     } catch (err: any) {
@@ -135,11 +146,11 @@ export default function PaymentPage() {
                 </div>
               ))}
             </div>
-            <Button className="w-full gap-2 mt-2" onClick={handlePayment} disabled={loading}>
+            <Button className="w-full gap-2 mt-2" onClick={handlePayment} disabled={loading || !scriptLoaded}>
               {loading
                 ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 : <CreditCard className="w-4 h-4" />}
-              {loading ? "Processing..." : `Pay ₹${(amount / 100).toLocaleString()}`}
+              {!scriptLoaded ? "Loading..." : loading ? "Processing..." : `Pay ₹${(amount / 100).toLocaleString()}`}
             </Button>
             <div className="flex items-center justify-center gap-6 text-xs text-muted-foreground pt-2">
               <span className="flex items-center gap-1"><Shield className="w-3 h-3" /> Secure Payment</span>
