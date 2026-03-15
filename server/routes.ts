@@ -11,7 +11,7 @@ import archiver from "archiver";
 import { z } from "zod";
 import type { User } from "@shared/schema";
 import { loginSchema, signUpSchema, roleEnum, planEnum, leadStatusEnum } from "@shared/schema";
-import { openai, speechToText, ensureCompatibleFormat } from "./replit_integrations/audio/client";
+import { openai, speechToText, transcribeLargeAudio, ensureCompatibleFormat } from "./replit_integrations/audio/client";
 import { sendWelcomeEmail, sendProspectEmail, sendPasswordResetEmail, sendPlanUpgradeEmail } from "./email";
 
 // ─── Validation helpers ────────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ const ALLOWED_SHEET_TYPES = [
 
 const upload = multer({
   dest: "/tmp/uploads/",
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB — chunked transcription handles large files
   fileFilter: (_req, file, cb) => {
     const allowed = [...ALLOWED_AUDIO_TYPES, ...ALLOWED_SHEET_TYPES];
     if (allowed.includes(file.mimetype)) return cb(null, true);
@@ -1165,8 +1165,8 @@ export async function registerRoutes(
             // Step 1: Transcription
             await storage.updateJob(jobId, "processing", 15, "🎙️ Transcribing audio... (this may take 1-3 minutes for large files)");
             const audioBuffer = fs.readFileSync(filePath);
-            const { buffer: compatibleBuffer, format } = await ensureCompatibleFormat(audioBuffer);
-            transcript = await speechToText(compatibleBuffer, format, audioLanguage);
+            await storage.updateJob(jobId, "processing", 20, "🎙️ Transcribing audio... Large files split into chunks automatically");
+            transcript = await transcribeLargeAudio(audioBuffer, audioLanguage);
             try { fs.unlinkSync(filePath); } catch {}
 
             // Step 2 + 3: Speaker diarization + AI Insights in ONE GPT-4o call
@@ -1180,42 +1180,50 @@ export async function registerRoutes(
                 messages: [
                   {
                     role: "system",
-                    content: `You are an expert meeting analyst and multilingual transcription assistant for an insurance CRM.
+                    content: `You are an expert multilingual meeting analyst and transcription assistant for a business CRM platform.
+You will receive a raw Whisper transcript from a phone call or meeting. The audio may be in Hindi, Marathi, English, Hinglish, or mixed languages.
 
-You will receive a raw Whisper transcript. Your tasks:
-1. Clean & format with speaker labels
+YOUR TWO TASKS:
+1. Clean & reformat the transcript with accurate speaker labels
 2. Extract structured business insights
 
-TRANSCRIPTION RULES:
-- Identify distinct speakers from conversation flow (questions vs answers, tone changes)
-- Label as "Speaker 1:", "Speaker 2:" etc — or use actual names/titles if mentioned
-- Preserve EXACT original language (Hindi, Marathi, English, Hinglish — do NOT translate)
-- If Whisper has repeated sentences, de-duplicate them
-- Mark unclear parts as [unclear]
-- If only one speaker, use "Speaker 1:"
+═══ TRANSCRIPTION CLEANING RULES ═══
+- Carefully identify distinct speakers from conversation flow (who asks vs who answers, topic shifts, tone)
+- Label speakers as "Speaker 1:", "Speaker 2:" etc. If real names/roles are mentioned (e.g. "Rahul bhai", "Sir"), use those
+- PRESERVE the exact original language — do NOT translate Hindi/Marathi/Hinglish to English
+- Fix obvious Whisper errors (wrong words that don't fit context) using surrounding context
+- Remove filler words: "umm", "uhh", "acha acha", repeated stutters
+- De-duplicate repeated sentences (Whisper sometimes repeats)
+- Mark truly unclear parts as [unclear]
+- For phone calls: one party is often the agent/caller, other is client — label accordingly if evident
+- Maintain natural paragraph breaks between speaker turns
+- If Devanagari script is present, preserve it exactly as-is
 
-INSIGHT RULES:
-- Extract EXACT numbers, rates, quantities — never fabricate
-- Empty array [] if section has no data
-- sentiment: "Positive", "Neutral", "Concerned", or "Critical"
+═══ INSIGHT EXTRACTION RULES ═══
+- Extract ONLY what is explicitly mentioned — never fabricate or assume
+- Include exact numbers, amounts, dates, names whenever spoken
+- For business context: capture product/service discussed, pricing, commitments made
+- Empty array [] if a section has no relevant data — never fill with guesses
+- sentiment: judge overall tone — "Positive", "Neutral", "Concerned", or "Critical"
 
-Return ONLY valid JSON (no markdown, no explanation):
+Return ONLY valid JSON (no markdown, no explanation, no preamble):
 {
-  "diarizedTranscript": "Speaker 1: text...\nSpeaker 2: text...",
-  "summary": "5-8 sentence summary of purpose, discussions, decisions, outcomes",
-  "targets": ["target with numbers"],
-  "achievements": ["achievement with data"],
-  "responsiblePersons": ["Name - role/responsibility"],
-  "kpis": ["Metric - exact value"],
-  "deadlines": ["Task - timeline"],
-  "riskPoints": ["risk or concern"],
-  "actionItems": ["action - owner"],
-  "keyDecisions": ["decision made"],
-  "nextSteps": ["next step"],
-  "clientMentions": ["Name/Company - context"],
-  "keyFigures": ["Description - exact value"],
+  "diarizedTranscript": "Speaker 1: ...\nSpeaker 2: ...",
+  "summary": "5-8 sentence summary covering: who spoke, purpose of call/meeting, key points discussed, decisions made, and outcome",
+  "targets": ["specific target or goal with numbers/timeline if mentioned"],
+  "achievements": ["achievement or milestone with data"],
+  "responsiblePersons": ["Name/Role - their responsibility or commitment"],
+  "kpis": ["Metric name - exact value mentioned"],
+  "deadlines": ["Task or commitment - date or timeline mentioned"],
+  "riskPoints": ["risk, concern, objection, or blocker raised"],
+  "actionItems": ["specific action to be taken - who will do it"],
+  "keyDecisions": ["decision or agreement reached"],
+  "nextSteps": ["next step or follow-up agreed upon"],
+  "clientMentions": ["client or company name - context of mention"],
+  "keyFigures": ["description - exact value/amount/number"],
   "sentiment": "Positive|Neutral|Concerned|Critical"
 }`
+
                   },
                   {
                     role: "user",
@@ -1290,47 +1298,8 @@ Return ONLY valid JSON (no markdown, no explanation):
         return res.status(400).json({ success: false, message: "No transcript or audio provided" });
       }
 
-      // ── Speaker Diarization via GPT Smart Split ──────────────────────────────
-      // Uses GPT-4o-mini to identify and label speakers from conversation flow
+      // Skip separate diarization — main GPT-4o call handles speaker labeling
       let diarizedTranscript = transcript;
-      try {
-        const diarizeResponse = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: [
-            {
-              role: "system",
-              content: `You are an expert at analyzing conversation transcripts and identifying different speakers.
-
-Your task is to split the transcript into labeled speaker turns. Follow these rules:
-1. Identify distinct speakers based on conversation flow, topics, questions vs answers, and tone
-2. Label speakers as "Speaker 1:", "Speaker 2:", etc. — or use actual names/titles if clearly mentioned (e.g. "Sir Ji:", "Haji:")
-3. Each speaker turn should be on a new line starting with the speaker label
-4. Preserve the original language (Hindi/English/Hinglish) exactly as spoken
-5. Do NOT translate or modify the content — only add speaker labels
-6. Group consecutive sentences from the same speaker together
-7. If the transcript is already short or has only one speaker, return it as "Speaker 1: [full text]"
-
-Return ONLY the formatted transcript with speaker labels. No explanation, no markdown.`
-            },
-            {
-              role: "user",
-              content: `Split this transcript by speaker:
-
-${transcript}`
-            }
-          ],
-          temperature: 0.1,
-          max_tokens: 3000,
-        });
-        const diarized = diarizeResponse.choices[0]?.message?.content?.trim();
-        if (diarized && diarized.length > 0) {
-          diarizedTranscript = diarized;
-        }
-      } catch (err: any) {
-        console.error("Speaker diarization error:", err.message);
-        // Fall back to original transcript if diarization fails
-        diarizedTranscript = transcript;
-      }
 
       let aiInsights: any = {};
       try {
@@ -1339,22 +1308,23 @@ ${transcript}`
           messages: [
             {
               role: "system",
-              content: `You are a senior AI meeting analyst for an insurance CRM system. Analyze the meeting transcript thoroughly and extract detailed, actionable insights. Be specific — include names, numbers, dates, and context wherever possible. Return a JSON object with these fields:
-- summary: A detailed 4-6 sentence executive summary covering the meeting's purpose, key outcomes, and overall direction
-- targets: Array of specific targets/goals discussed (include numbers, percentages, timelines where mentioned)
-- achievements: Array of achievements, milestones reached, or progress made (be specific with data)
-- responsiblePersons: Array of people mentioned with their responsibilities (format: "Name - Role/Responsibility")
-- kpis: Array of KPIs, metrics, or performance indicators discussed (include actual values if mentioned)
-- deadlines: Array of deadlines, timelines, or due dates (format: "Task/Item - Date/Timeline")
-- riskPoints: Array of risks, concerns, blockers, or challenges raised (include severity if apparent)
-- actionItems: Array of specific action items or tasks assigned (format: "Action - Owner (if mentioned)")
-- keyDecisions: Array of important decisions made during the meeting
-- nextSteps: Array of agreed next steps or follow-up actions
-- clientMentions: Array of client/customer names or accounts mentioned with context
-- keyFigures: Array of important numbers, amounts, percentages, or statistics mentioned (format: "Description - Value")
-- sentiment: Overall meeting sentiment in one word: "Positive", "Neutral", "Concerned", or "Critical"
-Return ONLY valid JSON, no markdown.`
+              content: `You are a senior AI business analyst specialising in multilingual call and meeting analysis. The transcript may contain Hindi, Marathi, English, Hinglish or mixed languages. Analyse thoroughly and extract detailed, actionable insights. Be specific — include exact names, numbers, amounts, dates, and context wherever mentioned. Never fabricate data. Return a JSON object with these exact fields:
+- summary: Detailed 5-7 sentence executive summary covering: purpose of the call/meeting, who was involved, key topics discussed, decisions made, commitments given, and overall outcome
+- targets: Specific targets or goals discussed (include numbers, percentages, timelines)
+- achievements: Achievements, milestones, or progress reported (with data)
+- responsiblePersons: People mentioned with their roles or responsibilities (format: "Name/Role - responsibility or commitment")
+- kpis: KPIs, metrics, or performance indicators mentioned (format: "Metric - exact value")
+- deadlines: Deadlines, timelines, or due dates mentioned (format: "Task - date or timeline")
+- riskPoints: Risks, concerns, objections, blockers, or challenges raised (note severity if clear)
+- actionItems: Specific actions or tasks to be done (format: "Action - owner if mentioned")
+- keyDecisions: Important decisions, agreements, or commitments made
+- nextSteps: Agreed next steps or follow-up actions
+- clientMentions: Client, customer, or company names mentioned with context
+- keyFigures: Important numbers, amounts, prices, percentages, or statistics (format: "description - exact value")
+- sentiment: Overall tone in one word only: "Positive", "Neutral", "Concerned", or "Critical"
+Return ONLY valid JSON, no markdown, no explanation.`
             },
+
             { role: "user", content: `Meeting Title: ${title}\n\nTranscript (with speakers identified):\n${diarizedTranscript}` }
           ],
           temperature: 0.3,
