@@ -53,6 +53,7 @@ ALLOWED_ORIGINS=https://crm.icaweb.in
 RESEND_API_KEY=<rotated March 2026 — check server>
 FROM_EMAIL=support@icaweb.in
 RC_API_KEY=<pending — Surepass>
+SARVAM_API_KEY=<active — dashboard.sarvam.ai>
 ```
 
 > ⚠️ SESSION_SECRET and RESEND_API_KEY were rotated in March 2026. Always use `cat /var/www/ica-crm/.env` on server for current values.
@@ -66,7 +67,8 @@ RC_API_KEY=<pending — Surepass>
 | Frontend | React 18 + Vite + TailwindCSS + Shadcn UI |
 | Backend | Express.js 5 + TypeScript |
 | Database | PostgreSQL 16 + Drizzle ORM |
-| AI | OpenAI Whisper (transcription) + GPT-4o (analysis) |
+| AI Transcription | Sarvam Saaras v3 (Hindi/Marathi) + OpenAI Whisper (English/auto) |
+| AI Analysis | GPT-4o (insights extraction + speaker diarization) |
 | Email | Resend API — domain icaweb.in (Verified ✓) |
 | Process Manager | PM2 cluster (2 instances) |
 | Web Server | Nginx + SSL (Let's Encrypt) |
@@ -129,6 +131,10 @@ RC_API_KEY=<pending — Surepass>
 | Welcome email fix | ✅ | Sent only on direct MASTER_ADMIN creation |
 | DB password rotation | ✅ | March 2026 security incident response |
 | Resend API key rotation | ✅ | March 2026 security incident response |
+| Sarvam AI integration | ✅ | Hindi/Marathi transcription — 25sec chunks |
+| Chunked transcription | ✅ | Supports 2hr+ meetings, auto-splits audio |
+| Generic AI prompts | ✅ | Not insurance-specific — works for any business |
+| 500MB upload limit | ✅ | Was 50MB — handles full day recordings |
 
 ---
 
@@ -146,7 +152,30 @@ RC_API_KEY=<pending — Surepass>
 
 ---
 
-## 📧 Automated Email System (Resend)
+## 🎙️ AI Transcription Architecture
+
+| Language | Engine | Chunk Size | Accuracy |
+|----------|--------|-----------|---------|
+| Marathi (mr) | Sarvam Saaras v3 | 25 sec chunks | ~90%+ |
+| Hindi (hi) | Sarvam Saaras v3 | 25 sec chunks | ~95%+ |
+| Gujarati, Tamil, Telugu, Kannada, Bengali, Punjabi, Urdu | Sarvam Saaras v3 | 25 sec chunks | High |
+| English (en) | OpenAI Whisper-1 | 10 min chunks | ~95%+ |
+| Auto detect | OpenAI Whisper-1 | 10 min chunks | Varies |
+
+> ⚠️ Always select language manually for best accuracy — never use Auto Detect for Hindi/Marathi.
+> Sarvam API key managed at: https://dashboard.sarvam.ai
+> Sarvam free tier: 30 sec/request → handled via chunking
+
+### Audio Upload Recommendations
+- **Format:** MP3, WAV, MP4, M4A
+- **Bitrate:** Minimum 128kbps
+- **Max file size:** 500MB
+- **Max duration:** 2hr+ (auto-chunked)
+- **Phone call recordings:** Convert MPEG → MP3 at 128kbps before upload
+
+---
+
+
 
 | Email Type | Trigger | Recipient |
 |-----------|---------|-----------|
@@ -272,7 +301,9 @@ curl -s https://api.resend.com/emails \
 | Emails not sending | Check RESEND_API_KEY in .env, test with curl command above |
 | Git push rejected | Use Personal Access Token, not password |
 | .env exposed (returns 200) | Add Nginx location block to deny .env files |
-| Duplicate welcome emails | Do NOT add email calls to approve route — only fires on direct creation |
+| Sarvam transcription failing | Check SARVAM_API_KEY in .env; verify at dashboard.sarvam.ai |
+| Bengali/gibberish in transcript | Audio corrupted by ffmpeg filters — check ensureCompatibleFormat |
+| Transcript has repetitions | removeRepetitions() handles this — check pm2 logs for details |
 
 ---
 
@@ -307,6 +338,7 @@ curl -s https://api.resend.com/emails \
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v4.2 | March 2026 | Sarvam AI integration (Hindi/Marathi), chunked transcription (2hr+ support), 500MB upload, generic AI prompts, repetition removal |
 | v4.1 | March 2026 | Security hardening (.env block, credential rotation), welcome email fix (direct creation only, no duplicates), DB password rotation |
 | v4.0 | March 2026 | Resend email integration, plan upgrade email, VS Code SSH, fontSrc fix, .gitignore cleanup, TEAM_LEADER role correction |
 | v3.0 | March 2026 | RC Lookup UI, plan limits, WhatsApp, VPS deployment, Nginx + SSL |
@@ -315,4 +347,4 @@ curl -s https://api.resend.com/emails \
 
 ---
 
-*Last updated: March 2026 | Sameer | ICA — Innovation, Consulting & Automation*
+*Last updated: March 2026 v4.2 | Sameer | ICA — Innovation, Consulting & Automation*
