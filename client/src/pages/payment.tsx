@@ -28,7 +28,6 @@ export default function PaymentPage() {
   const [scriptLoaded, setScriptLoaded] = useState(false);
 
   const params = new URLSearchParams(window.location.search);
-  const orderId = params.get("orderId");
   const plan = params.get("plan") || "";
   const amount = parseInt(params.get("amount") || "0");
 
@@ -47,29 +46,39 @@ export default function PaymentPage() {
   const handlePayment = async () => {
     setLoading(true);
     try {
+      // apiFetch returns data.data directly (not the wrapper)
       const orderData = await apiFetch("/api/payments/create-order", {
         method: "POST",
         body: JSON.stringify({ plan, agencyCode: user?.agencyCode }),
       });
-      if (!orderData.success) {
-        toast({ title: "Failed to create order", description: orderData.message, variant: "destructive" });
+
+      // orderData = { orderId, amount, currency, keyId, agencyName, plan }
+      const { orderId, amount: orderAmount, keyId } = orderData;
+
+      if (!orderId || !keyId) {
+        toast({ title: "Failed to create order", variant: "destructive" });
         setLoading(false);
         return;
       }
-      const { orderId: newOrderId, amount: newAmount, keyId } = orderData.data;
+
+      if (!window.Razorpay) {
+        toast({ title: "Payment gateway not loaded. Please refresh.", variant: "destructive" });
+        setLoading(false);
+        return;
+      }
 
       const options = {
         key: keyId,
-        amount: newAmount,
+        amount: orderAmount,
         currency: "INR",
         name: "ICA CRM",
         description: `${plan} Plan - Monthly Subscription`,
-        order_id: newOrderId,
+        order_id: orderId,
         prefill: { name: user?.fullName || "", email: user?.email || "" },
         theme: { color: "#1e3a5f" },
         handler: async (response: any) => {
           try {
-            const verify = await apiFetch("/api/payments/verify", {
+            await apiFetch("/api/payments/verify", {
               method: "POST",
               body: JSON.stringify({
                 razorpay_order_id: response.razorpay_order_id,
@@ -77,28 +86,19 @@ export default function PaymentPage() {
                 razorpay_signature: response.razorpay_signature,
               }),
             });
-            if (verify.success) {
-              setPaid(true);
-              toast({ title: "Payment successful! Plan upgraded." });
-            } else {
-              toast({ title: "Verification failed", description: verify.message, variant: "destructive" });
-            }
+            setPaid(true);
+            toast({ title: "Payment successful! Plan upgraded." });
           } catch (err: any) {
-            toast({ title: "Verification error", description: err.message, variant: "destructive" });
+            toast({ title: "Verification failed", description: err.message, variant: "destructive" });
           }
         },
         modal: { ondismiss: () => setLoading(false) },
       };
 
-      if (!window.Razorpay) {
-        toast({ title: "Payment gateway not loaded", description: "Please refresh and try again.", variant: "destructive" });
-        setLoading(false);
-        return;
-      }
       const rzp = new window.Razorpay(options);
       rzp.open();
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Failed to create order", description: err.message, variant: "destructive" });
       setLoading(false);
     }
   };
@@ -146,7 +146,11 @@ export default function PaymentPage() {
                 </div>
               ))}
             </div>
-            <Button className="w-full gap-2 mt-2" onClick={handlePayment} disabled={loading || !scriptLoaded}>
+            <Button
+              className="w-full gap-2 mt-2"
+              onClick={handlePayment}
+              disabled={loading || !scriptLoaded}
+            >
               {loading
                 ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 : <CreditCard className="w-4 h-4" />}
