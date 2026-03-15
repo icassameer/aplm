@@ -135,7 +135,6 @@ function getNavItems(role: string) {
     items.push({ title: "AI Proceeding", url: "/meetings", icon: Brain });
     items.push({ title: "Upgrade Requests", url: "/upgrade-requests", icon: ArrowUpCircle });
     items.push({ title: "RC Lookup", url: "/rc-lookup", icon: Car });
-    items.push({ title: "RC Lookup", url: "/rc-lookup", icon: Car });
   }
 
   if (role === "AGENCY_ADMIN") {

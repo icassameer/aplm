@@ -118,7 +118,7 @@ export default function RCLookupPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
               <Car className="w-6 h-6 text-primary" />
-              RC Lookup \u2014 All Agencies
+              RC Lookup — All Agencies
             </h1>
             <p className="text-sm text-muted-foreground mt-1">View and manage RC lookup history across all agencies</p>
           </div>
