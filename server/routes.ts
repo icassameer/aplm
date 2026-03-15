@@ -50,15 +50,15 @@ const upload = multer({
 // AI Proceeding monthly transcription limits per plan
 const AI_PROCEEDING_LIMITS: Record<string, number> = {
   BASIC: 0,        // No AI access
-  PRO: 10,         // 10 transcriptions per month
-  ENTERPRISE: Infinity, // Unlimited
+  PRO: 15,         // 15 transcriptions per month
+  ENTERPRISE: 40,  // 40 transcriptions per month
 };
 
 // RC Lookup monthly limits per plan
 const RC_LOOKUP_LIMITS: Record<string, number> = {
   BASIC: 0,        // No RC access
   PRO: 50,         // 50 lookups per month
-  ENTERPRISE: Infinity, // Unlimited
+  ENTERPRISE: 200, // 200 lookups per month
 };
 
 function generateToken(user: User): string {
