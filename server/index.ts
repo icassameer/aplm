@@ -23,14 +23,14 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://checkout.razorpay.com", "https://cdn.razorpay.com"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        imgSrc: ["'self'", "data:", "blob:"],
-        connectSrc: ["'self'"],
+        imgSrc: ["'self'", "data:", "blob:", "https://*.razorpay.com"],
+        connectSrc: ["'self'", "https://api.razorpay.com", "https://lumberjack.razorpay.com"],
         objectSrc: ["'none'"],
         mediaSrc: ["'self'", "blob:"],
-        frameSrc: ["'none'"],
+        frameSrc: ["https://api.razorpay.com", "https://checkout.razorpay.com"],
       },
     },
     hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
