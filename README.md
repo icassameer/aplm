@@ -144,7 +144,7 @@ SARVAM_API_KEY=<active — dashboard.sarvam.ai>
 |------|----------|-------|
 | RC API key (Surepass) | 🔴 High | ₹2.25/hit, min ₹25k deposit |
 | Update plan pricing in DB | 🔴 High | PRO=5500, ENTERPRISE=15000 |
-| Make GitHub repo private | 🔴 High | Currently public — exposes codebase |
+| Make GitHub repo private | ✅ Done | Repo is now private |
 | Privacy policy page | 🟡 Medium | /privacy-policy route |
 | Auto-reply on support@icaweb.in | 🟡 Medium | Acknowledge incoming emails |
 | AI Proceeding accuracy | 🟡 Medium | Marathi/Hindi improvement |
