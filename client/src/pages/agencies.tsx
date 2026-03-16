@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { useApi } from "@/hooks/use-api";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,16 +13,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
-import { Building2, Plus, Users, Phone, Crown, Trash2 } from "lucide-react";
+import { Building2, Plus, Users, Phone, Crown, Trash2, Settings2 } from "lucide-react";
 
 export default function AgenciesPage() {
   const [, setLocation] = useLocation();
   const { apiFetch } = useApi();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
   const [open, setOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+
   const [selectedAgency, setSelectedAgency] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ leadLimit: "", userLimit: "", plan: "" });
 
   const [form, setForm] = useState({ name: "", plan: "BASIC", leadLimit: "500", userLimit: "10" });
   const [adminForm, setAdminForm] = useState({ username: "", password: "", fullName: "", email: "" });
@@ -60,6 +64,24 @@ export default function AgenciesPage() {
     },
   });
 
+  const editLimitsMutation = useMutation({
+    mutationFn: () =>
+      apiFetch(`/api/agencies/${selectedAgency?.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          leadLimit: parseInt(editForm.leadLimit),
+          userLimit: parseInt(editForm.userLimit),
+          plan: editForm.plan,
+        }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/agencies"] });
+      setEditOpen(false);
+      toast({ title: "Agency limits updated successfully" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
   const deleteAgencyMutation = useMutation({
     mutationFn: (id: string) => apiFetch(`/api/agencies/${id}`, { method: "DELETE" }),
     onSuccess: () => {
@@ -85,6 +107,16 @@ export default function AgenciesPage() {
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
+
+  const openEditDialog = (agency: any) => {
+    setSelectedAgency(agency);
+    setEditForm({
+      leadLimit: String(agency.leadLimit),
+      userLimit: String(agency.userLimit),
+      plan: agency.plan,
+    });
+    setEditOpen(true);
+  };
 
   const planColors: Record<string, string> = {
     BASIC: "bg-muted text-foreground",
@@ -191,16 +223,28 @@ export default function AgenciesPage() {
                     <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
                       <span className="flex items-center gap-1">
                         <Phone className="w-3 h-3" />
-                        {agency.leadLimit} leads max
+                        <strong className="text-foreground">{agency.leadLimit}</strong>&nbsp;leads max
                       </span>
                       <span className="flex items-center gap-1">
                         <Users className="w-3 h-3" />
-                        {agency.userLimit} users max
+                        <strong className="text-foreground">{agency.userLimit}</strong>&nbsp;users max
                       </span>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Edit Limits button */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openEditDialog(agency)}
+                    data-testid={`button-edit-limits-${agency.id}`}
+                  >
+                    <Settings2 className="w-3 h-3 mr-1" />
+                    Edit Limits
+                  </Button>
+
                   <Button
                     variant="secondary"
                     size="sm"
@@ -210,15 +254,20 @@ export default function AgenciesPage() {
                     <Crown className="w-3 h-3 mr-1" />
                     Add Admin
                   </Button>
+
                   <Button
                     variant="destructive"
                     size="sm"
-                    onClick={() => { if (confirm(`Delete agency "${agency.name}" and all its data? This cannot be undone.`)) deleteAgencyMutation.mutate(agency.id); }}
+                    onClick={() => {
+                      if (confirm(`Delete agency "${agency.name}" and all its data? This cannot be undone.`))
+                        deleteAgencyMutation.mutate(agency.id);
+                    }}
                     data-testid={`button-delete-agency-${agency.id}`}
                   >
                     <Trash2 className="w-3 h-3 mr-1" />
                     Delete
                   </Button>
+
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">{agency.isActive ? "Active" : "Inactive"}</span>
                     <Switch
@@ -244,6 +293,89 @@ export default function AgenciesPage() {
         </Card>
       )}
 
+      {/* ── Edit Limits Dialog ── */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Limits — {selectedAgency?.name}</DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => { e.preventDefault(); editLimitsMutation.mutate(); }}
+            className="space-y-4"
+          >
+            {/* Current values shown as reference */}
+            <div className="rounded-lg bg-muted/50 px-4 py-3 text-sm text-muted-foreground flex gap-6">
+              <span>Current leads: <strong className="text-foreground">{selectedAgency?.leadLimit}</strong></span>
+              <span>Current users: <strong className="text-foreground">{selectedAgency?.userLimit}</strong></span>
+              <span>Plan: <strong className="text-foreground">{selectedAgency?.plan}</strong></span>
+            </div>
+
+            {/* Plan selector */}
+            <div className="space-y-2">
+              <Label>Plan</Label>
+              <Select value={editForm.plan} onValueChange={(v) => setEditForm({ ...editForm, plan: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="BASIC">Basic</SelectItem>
+                  <SelectItem value="PRO">Pro</SelectItem>
+                  <SelectItem value="ENTERPRISE">Enterprise</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Lead & User limits */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Lead Limit</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={editForm.leadLimit}
+                  onChange={(e) => setEditForm({ ...editForm, leadLimit: e.target.value })}
+                  placeholder="e.g. 1000"
+                  required
+                  data-testid="input-edit-lead-limit"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>User Limit</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={editForm.userLimit}
+                  onChange={(e) => setEditForm({ ...editForm, userLimit: e.target.value })}
+                  placeholder="e.g. 10"
+                  required
+                  data-testid="input-edit-user-limit"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setEditOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="flex-1"
+                disabled={editLimitsMutation.isPending}
+                data-testid="button-save-limits"
+              >
+                {editLimitsMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Add Admin Dialog ── */}
       <Dialog open={adminOpen} onOpenChange={setAdminOpen}>
         <DialogContent>
           <DialogHeader>
@@ -288,7 +420,12 @@ export default function AgenciesPage() {
                 required
               />
             </div>
-            <Button type="submit" className="w-full" disabled={createAdminMutation.isPending} data-testid="button-submit-admin">
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={createAdminMutation.isPending}
+              data-testid="button-submit-admin"
+            >
               {createAdminMutation.isPending ? "Creating..." : "Create Admin"}
             </Button>
           </form>

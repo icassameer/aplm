@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useApi } from "@/hooks/use-api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,19 +11,33 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowUpCircle, CheckCircle2, XCircle, Clock, Building2 } from "lucide-react";
+import { ArrowUpCircle, CheckCircle2, XCircle, CreditCard } from "lucide-react";
 
 const planOrder = ["BASIC", "PRO", "ENTERPRISE"];
+
+const PLAN_PRICES: Record<string, number> = {
+  BASIC: 2500,
+  PRO: 5500,
+  ENTERPRISE: 12000,
+};
+
 const planColors: Record<string, string> = {
   BASIC: "bg-muted text-muted-foreground",
   PRO: "bg-chart-2 text-white dark:text-white",
   ENTERPRISE: "bg-chart-1 text-white dark:text-white",
 };
+
 const statusColors: Record<string, string> = {
   PENDING: "bg-amber-100 text-amber-700 border-amber-200",
   APPROVED: "bg-green-100 text-green-700 border-green-200",
   DENIED: "bg-red-100 text-red-700 border-red-200",
 };
+
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
 
 export default function UpgradeRequestsPage() {
   const { user, token } = useAuth();
@@ -34,6 +48,7 @@ export default function UpgradeRequestsPage() {
   const [open, setOpen] = useState(false);
   const [requestedPlan, setRequestedPlan] = useState("");
   const [remarks, setRemarks] = useState("");
+  const [payLoading, setPayLoading] = useState(false);
 
   const { data: dashboard } = useQuery({
     queryKey: ["/api/dashboard"],
@@ -79,6 +94,77 @@ export default function UpgradeRequestsPage() {
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
+
+  const handlePayAndUpgrade = (planKey: string) => {
+    const amount = PLAN_PRICES[planKey];
+    if (!amount) return;
+
+    setPayLoading(true);
+
+    // Load Razorpay script dynamically if not already loaded
+    const loadRazorpay = () => new Promise<void>((resolve) => {
+      if (window.Razorpay) return resolve();
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.onload = () => resolve();
+      document.body.appendChild(script);
+    });
+
+    loadRazorpay().then(() => {
+      const options = {
+        key: "rzp_live_SRR1yJrdnx1oaW", // ← paste your live key here
+        amount: amount * 100, // in paise
+        currency: "INR",
+        name: "ICA – Innovation, Consulting & Automation",
+        description: `ICA CRM – ${planKey} Plan`,
+        prefill: {
+          name: user?.fullName || "",
+          email: user?.email || "",
+          contact: user?.mobile || "",
+        },
+        notes: {
+          agency_code: user?.agencyCode || "",
+          plan: planKey,
+          user_id: user?.id || "",
+        },
+        theme: { color: "#00c853" },
+        handler: function (response: any) {
+          setPayLoading(false);
+          toast({
+            title: "✅ Payment Successful!",
+            description: `Payment ID: ${response.razorpay_payment_id}. Our team will activate your ${planKey} plan shortly.`,
+          });
+          // Submit upgrade request automatically after payment
+          apiFetch("/api/upgrade-requests", {
+            method: "POST",
+            body: JSON.stringify({
+              requestedPlan: planKey,
+              remarks: `Payment completed. Payment ID: ${response.razorpay_payment_id}`,
+            }),
+          }).then(() => {
+            queryClient.invalidateQueries({ queryKey: ["/api/upgrade-requests"] });
+          });
+        },
+        modal: {
+          ondismiss: () => setPayLoading(false),
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on("payment.failed", (response: any) => {
+        setPayLoading(false);
+        toast({
+          title: "Payment Failed",
+          description: response.error?.description || "Please try again.",
+          variant: "destructive",
+        });
+      });
+      rzp.open();
+    }).catch(() => {
+      setPayLoading(false);
+      toast({ title: "Error", description: "Could not load payment gateway. Please try again.", variant: "destructive" });
+    });
+  };
 
   const agency = dashboard?.agency;
   const currentPlan = agency?.plan || "BASIC";
@@ -132,63 +218,71 @@ export default function UpgradeRequestsPage() {
       )}
 
       {!isMaster && availableUpgrades.length > 0 && (
-        <Dialog open={open} onOpenChange={setOpen}>
-          <Button
+        <div className="flex flex-wrap gap-3">
+          {/* Pay & Upgrade button — opens Razorpay directly */}
+          {availableUpgrades.map(plan => (
+            <Button
+              key={plan}
               variant="default"
               className="gap-2 bg-green-600 hover:bg-green-700 text-white"
-              onClick={() => {
-                const nextPlan = availableUpgrades[0];
-                if (nextPlan) {
-                  setLocation(`/payment?plan=${nextPlan}&amount=${PLAN_PRICES[nextPlan]}`);
-                }
-              }}
-              disabled={availableUpgrades.length === 0}
+              onClick={() => handlePayAndUpgrade(plan)}
+              disabled={payLoading}
             >
               <CreditCard className="w-4 h-4" />
-              Pay & Upgrade Now
+              {payLoading ? "Loading..." : `Pay & Upgrade to ${plan} — ₹${PLAN_PRICES[plan].toLocaleString("en-IN")}/mo`}
             </Button>
-          <DialogTrigger asChild>
-            <Button data-testid="button-request-upgrade">
-              <ArrowUpCircle className="w-4 h-4 mr-2" />
-              Request Plan Upgrade
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Request Plan Upgrade</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Current Plan</Label>
-                <Badge className={planColors[currentPlan]}>{currentPlan}</Badge>
-              </div>
-              <div className="space-y-2">
-                <Label>Upgrade To</Label>
-                <Select value={requestedPlan} onValueChange={setRequestedPlan}>
-                  <SelectTrigger data-testid="select-plan"><SelectValue placeholder="Select plan" /></SelectTrigger>
-                  <SelectContent>
-                    {availableUpgrades.map(p => (
-                      <SelectItem key={p} value={p}>{p}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Remarks (optional)</Label>
-                <Textarea
-                  data-testid="input-upgrade-remarks"
-                  value={remarks}
-                  onChange={(e) => setRemarks(e.target.value)}
-                  placeholder="Why do you need this upgrade?"
-                  rows={3}
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={createMutation.isPending || !requestedPlan} data-testid="button-submit-upgrade">
-                {createMutation.isPending ? "Submitting..." : "Submit Request"}
+          ))}
+
+          {/* Request upgrade manually (no payment) */}
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" data-testid="button-request-upgrade">
+                <ArrowUpCircle className="w-4 h-4 mr-2" />
+                Request Plan Upgrade
               </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Request Plan Upgrade</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Current Plan</Label>
+                  <Badge className={planColors[currentPlan]}>{currentPlan}</Badge>
+                </div>
+                <div className="space-y-2">
+                  <Label>Upgrade To</Label>
+                  <Select value={requestedPlan} onValueChange={setRequestedPlan}>
+                    <SelectTrigger data-testid="select-plan"><SelectValue placeholder="Select plan" /></SelectTrigger>
+                    <SelectContent>
+                      {availableUpgrades.map(p => (
+                        <SelectItem key={p} value={p}>{p}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Remarks (optional)</Label>
+                  <Textarea
+                    data-testid="input-upgrade-remarks"
+                    value={remarks}
+                    onChange={(e) => setRemarks(e.target.value)}
+                    placeholder="Why do you need this upgrade?"
+                    rows={3}
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={createMutation.isPending || !requestedPlan}
+                  data-testid="button-submit-upgrade"
+                >
+                  {createMutation.isPending ? "Submitting..." : "Submit Request"}
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       )}
 
       <div className="space-y-3">
@@ -245,7 +339,7 @@ export default function UpgradeRequestsPage() {
           <Card>
             <CardContent className="p-8 text-center">
               <ArrowUpCircle className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">No upgrade requests</p>
+              <p className="text-sm text-muted-foreground">No upgrade requests yet</p>
             </CardContent>
           </Card>
         )}

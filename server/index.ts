@@ -23,14 +23,30 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://checkout.razorpay.com", "https://cdn.razorpay.com"],
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "'unsafe-eval'",
+          "https://checkout.razorpay.com",
+          "https://cdn.razorpay.com",
+          "https://static.cloudflareinsights.com",
+        ],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "data:", "blob:", "https://*.razorpay.com"],
-        connectSrc: ["'self'", "https://api.razorpay.com", "https://lumberjack.razorpay.com"],
+        connectSrc: [
+          "'self'",
+          "https://api.razorpay.com",
+          "https://lumberjack.razorpay.com",
+          "https://checkout.razorpay.com",
+        ],
         objectSrc: ["'none'"],
         mediaSrc: ["'self'", "blob:"],
-        frameSrc: ["https://api.razorpay.com", "https://checkout.razorpay.com"],
+        frameSrc: [
+          "'self'",
+          "https://api.razorpay.com",
+          "https://checkout.razorpay.com",
+        ],
       },
     },
     hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
@@ -165,7 +181,6 @@ app.use((req, res, next) => {
   const port = parseInt(process.env.PORT || "5000", 10);
   httpServer.listen(port, "127.0.0.1", async () => {
     log(`serving on port ${port}`);
-    // Auto-seed only in development
     if (process.env.NODE_ENV !== "production") {
       try {
         const seedRes = await fetch(`http://127.0.0.1:${port}/api/seed`, { method: "POST" });
