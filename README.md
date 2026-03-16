@@ -144,7 +144,7 @@ SARVAM_API_KEY=<active — dashboard.sarvam.ai>
 |------|----------|-------|
 | RC API key (Surepass) | 🔴 High | ₹2.25/hit, min ₹25k deposit |
 | Update plan pricing in DB | 🔴 High | PRO=5500, ENTERPRISE=15000 |
-| Make GitHub repo private | ✅ Done | Repo is now private |
+| Make GitHub repo private | 🔴 High | Currently public — exposes codebase |
 | Privacy policy page | 🟡 Medium | /privacy-policy route |
 | Auto-reply on support@icaweb.in | 🟡 Medium | Acknowledge incoming emails |
 | AI Proceeding accuracy | 🟡 Medium | Marathi/Hindi improvement |
@@ -338,7 +338,6 @@ curl -s https://api.resend.com/emails \
 
 | Version | Date | Changes |
 |---------|------|---------|
-| v4.3 | March 2026 | MASTER_ADMIN RC Lookup view/delete across agencies, tap-to-call for TELE_CALLER, AI limits PRO=15 ENTERPRISE=40, RC limits PRO=50 ENTERPRISE=200, ENTERPRISE plan ₹12,000, GitHub repo private |
 | v4.2 | March 2026 | Sarvam AI integration (Hindi/Marathi), chunked transcription (2hr+ support), 500MB upload, generic AI prompts, repetition removal |
 | v4.1 | March 2026 | Security hardening (.env block, credential rotation), welcome email fix (direct creation only, no duplicates), DB password rotation |
 | v4.0 | March 2026 | Resend email integration, plan upgrade email, VS Code SSH, fontSrc fix, .gitignore cleanup, TEAM_LEADER role correction |
