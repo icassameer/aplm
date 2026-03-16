@@ -4,7 +4,6 @@ import { useApi } from "@/hooks/use-api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowUpCircle, CheckCircle2, XCircle, Clock, Building2, CreditCard } from "lucide-react";
+import { ArrowUpCircle, CheckCircle2, XCircle, Clock, Building2 } from "lucide-react";
 
 const planOrder = ["BASIC", "PRO", "ENTERPRISE"];
 const planColors: Record<string, string> = {
@@ -26,14 +25,7 @@ const statusColors: Record<string, string> = {
   DENIED: "bg-red-100 text-red-700 border-red-200",
 };
 
-const PLAN_PRICES: Record<string, number> = {
-  BASIC: 250000,
-  PRO: 550000,
-  ENTERPRISE: 1200000,
-};
-
 export default function UpgradeRequestsPage() {
-  const [, setLocation] = useLocation();
   const { user, token } = useAuth();
   const { apiFetch } = useApi();
   const { toast } = useToast();
