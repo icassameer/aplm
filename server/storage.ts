@@ -1,7 +1,7 @@
-import { eq, and, or, desc, asc, count, sql, ilike, isNull, isNotNull, lt } from "drizzle-orm";
+import { eq, and, or, desc, asc, count, sql, ilike, isNull, isNotNull, lt, gt } from "drizzle-orm";
 import { db } from "./db";
 import {
-  agencies, users, leads, auditLogs, meetings, services, upgradeRequests, rcRecords, processingJobs, payments, payments,
+  agencies, users, leads, auditLogs, meetings, services, upgradeRequests, rcRecords, processingJobs, payments,
   type Agency, type InsertAgency,
   type User, type InsertUser,
   type Lead, type InsertLead,
@@ -9,10 +9,9 @@ import {
   type Service, type InsertService,
   type UpgradeRequest, type InsertUpgradeRequest,
   type RcRecord, type InsertRcRecord,
-  type ProcessingJob
+  type ProcessingJob,
+  type Payment, type InsertPayment,
 } from "@shared/schema";
-
-import type { Payment, InsertPayment } from "@shared/schema";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -34,7 +33,10 @@ export interface IStorage {
   getAgencyByCode(code: string): Promise<Agency | undefined>;
   getAllAgencies(): Promise<Agency[]>;
   updateAgency(id: string, data: Partial<Agency>): Promise<Agency | undefined>;
+  updateAgencyByCode(agencyCode: string, data: Partial<Agency>): Promise<Agency | undefined>;
   deleteAgency(id: string): Promise<void>;
+  getExpiredAgencies(now: Date): Promise<Agency[]>;
+  getAgenciesExpiringBefore(targetDate: Date, now: Date): Promise<Agency[]>;
 
   createLead(lead: InsertLead): Promise<Lead>;
   getLead(id: string): Promise<Lead | undefined>;
@@ -72,18 +74,21 @@ export interface IStorage {
   getRcRecordsByAgency(agencyCode: string): Promise<RcRecord[]>;
   getAllRcRecords(): Promise<RcRecord[]>;
   deleteRcRecord(id: string): Promise<void>;
+  getRcRecordByNumber(agencyCode: string, rcNumber: string): Promise<RcRecord | undefined>;
+
   createPayment(data: InsertPayment): Promise<Payment>;
   getPaymentByOrderId(orderId: string): Promise<Payment | undefined>;
   getPaymentsByAgency(agencyCode: string): Promise<Payment[]>;
   updatePayment(orderId: string, data: Partial<Payment>): Promise<Payment | undefined>;
   getAllPayments(): Promise<Payment[]>;
-  getRcRecordByNumber(agencyCode: string, rcNumber: string): Promise<RcRecord | undefined>;
+  createPaymentRecord(data: InsertPayment): Promise<Payment>;
 
-  // Processing jobs
   createJob(id: string, message: string): Promise<void>;
   updateJob(id: string, status: string, progress: number, message: string, result?: any, error?: string): Promise<void>;
   getJob(id: string): Promise<ProcessingJob | undefined>;
   deleteJob(id: string): Promise<void>;
+
+  getNotifications(userId: string, role: string, agencyCode: string | null): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -176,8 +181,15 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(agencies).orderBy(desc(agencies.createdAt));
   }
 
+  // Update by ID (used for isActive toggle, leadLimit, userLimit)
   async updateAgency(id: string, data: Partial<Agency>): Promise<Agency | undefined> {
     const [updated] = await db.update(agencies).set(data).where(eq(agencies.id, id)).returning();
+    return updated;
+  }
+
+  // Update by agencyCode (used for subscription activation from webhook)
+  async updateAgencyByCode(agencyCode: string, data: Partial<Agency>): Promise<Agency | undefined> {
+    const [updated] = await db.update(agencies).set(data).where(eq(agencies.agencyCode, agencyCode)).returning();
     return updated;
   }
 
@@ -195,6 +207,29 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  // ── Subscription queries ────────────────────────────────────────────────────
+
+  // Get agencies where subscription has expired (for daily cron)
+  async getExpiredAgencies(now: Date): Promise<Agency[]> {
+    return db.select().from(agencies).where(
+      and(
+        lt(agencies.subscriptionExpiry, now),
+        eq(agencies.subscriptionStatus, "ACTIVE")
+      )
+    );
+  }
+
+  // Get agencies expiring before targetDate but after now (for reminder emails)
+  async getAgenciesExpiringBefore(targetDate: Date, now: Date): Promise<Agency[]> {
+    return db.select().from(agencies).where(
+      and(
+        lt(agencies.subscriptionExpiry, targetDate),
+        gt(agencies.subscriptionExpiry, now),
+        eq(agencies.subscriptionStatus, "ACTIVE")
+      )
+    );
+  }
+
   async createLead(lead: InsertLead): Promise<Lead> {
     const [created] = await db.insert(leads).values(lead).returning();
     return created;
@@ -208,32 +243,23 @@ export class DatabaseStorage implements IStorage {
   async getLeadsByAgency(agencyCode: string, page: number = 1, limit: number = 20, status?: string, assignmentFilter?: string, search?: string): Promise<{ leads: Lead[]; total: number }> {
     const offset = (page - 1) * limit;
     const conditions = [eq(leads.agencyCode, agencyCode)];
-    if (status && status !== "ALL") {
-      conditions.push(eq(leads.status, status));
-    }
-    if (assignmentFilter === "UNASSIGNED") {
-      conditions.push(isNull(leads.assignedTo));
-    } else if (assignmentFilter === "ASSIGNED") {
-      conditions.push(isNotNull(leads.assignedTo));
-    }
+    if (status && status !== "ALL") conditions.push(eq(leads.status, status));
+    if (assignmentFilter === "UNASSIGNED") conditions.push(isNull(leads.assignedTo));
+    else if (assignmentFilter === "ASSIGNED") conditions.push(isNotNull(leads.assignedTo));
     if (search && search.trim()) {
       const term = `%${search.trim()}%`;
       conditions.push(or(ilike(leads.name, term), ilike(leads.phone, term), ilike(leads.email, term))!);
     }
     const where = and(...conditions);
-
     const [totalResult] = await db.select({ count: count() }).from(leads).where(where);
     const result = await db.select().from(leads).where(where).orderBy(desc(leads.createdAt)).limit(limit).offset(offset);
-
     return { leads: result, total: totalResult.count };
   }
 
   async getLeadsByAssignee(assignedTo: string, page: number = 1, limit: number = 20, status?: string, search?: string): Promise<{ leads: Lead[]; total: number }> {
     const offset = (page - 1) * limit;
     const conditions = [eq(leads.assignedTo, assignedTo)];
-    if (status && status !== "ALL") {
-      conditions.push(eq(leads.status, status));
-    }
+    if (status && status !== "ALL") conditions.push(eq(leads.status, status));
     if (search && search.trim()) {
       const term = `%${search.trim()}%`;
       conditions.push(or(ilike(leads.name, term), ilike(leads.phone, term), ilike(leads.email, term))!);
@@ -263,12 +289,7 @@ export class DatabaseStorage implements IStorage {
     const conditions = [eq(leads.agencyCode, agencyCode)];
     if (assignedTo) conditions.push(eq(leads.assignedTo, assignedTo));
     const where = and(...conditions);
-
-    const result = await db.select({
-      status: leads.status,
-      count: count(),
-    }).from(leads).where(where).groupBy(leads.status);
-
+    const result = await db.select({ status: leads.status, count: count() }).from(leads).where(where).groupBy(leads.status);
     const stats: Record<string, number> = { NEW: 0, CONTACTED: 0, FOLLOW_UP: 0, CONVERTED: 0, NOT_INTERESTED: 0 };
     result.forEach(r => { stats[r.status] = r.count; });
     return stats;
@@ -343,7 +364,6 @@ export class DatabaseStorage implements IStorage {
     const followUpDiscipline = stats.followUps > 0 ? ((stats.followUps - stats.overdueFollowUps) / stats.followUps) * 100 : 100;
     const activityConsistency = Math.min(100, (total / 10) * 100);
     const overduePenalty = stats.overdueFollowUps > 0 ? Math.min(100, (stats.overdueFollowUps / total) * 100) : 0;
-
     const score = (conversionRate * 0.4) + (followUpDiscipline * 0.3) + (activityConsistency * 0.2) - (overduePenalty * 0.1);
 
     return {
@@ -467,23 +487,55 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getRcRecordsByAgency(agencyCode: string): Promise<RcRecord[]> {
-    return await db.select().from(rcRecords)
-      .where(eq(rcRecords.agencyCode, agencyCode))
-      .orderBy(desc(rcRecords.createdAt))
-      .limit(50);
+    return db.select().from(rcRecords).where(eq(rcRecords.agencyCode, agencyCode)).orderBy(desc(rcRecords.createdAt)).limit(50);
   }
 
   async getAllRcRecords(): Promise<RcRecord[]> {
-    return await db.select().from(rcRecords).orderBy(desc(rcRecords.createdAt));
+    return db.select().from(rcRecords).orderBy(desc(rcRecords.createdAt));
   }
+
   async deleteRcRecord(id: string): Promise<void> {
     await db.delete(rcRecords).where(eq(rcRecords.id, id));
   }
+
   async getRcRecordByNumber(agencyCode: string, rcNumber: string): Promise<RcRecord | undefined> {
-    const [record] = await db.select().from(rcRecords)
-      .where(and(eq(rcRecords.agencyCode, agencyCode), eq(rcRecords.rcNumber, rcNumber)));
+    const [record] = await db.select().from(rcRecords).where(
+      and(eq(rcRecords.agencyCode, agencyCode), eq(rcRecords.rcNumber, rcNumber))
+    );
     return record;
   }
+
+  // ── Payment functions ───────────────────────────────────────────────────────
+
+  async createPayment(data: InsertPayment): Promise<Payment> {
+    const [record] = await db.insert(payments).values(data).returning();
+    return record;
+  }
+
+  // Alias used by webhook
+  async createPaymentRecord(data: InsertPayment): Promise<Payment> {
+    return this.createPayment(data);
+  }
+
+  async getPaymentByOrderId(orderId: string): Promise<Payment | undefined> {
+    const [record] = await db.select().from(payments).where(eq(payments.razorpayOrderId, orderId));
+    return record;
+  }
+
+  async getPaymentsByAgency(agencyCode: string): Promise<Payment[]> {
+    return db.select().from(payments).where(eq(payments.agencyCode, agencyCode)).orderBy(desc(payments.createdAt));
+  }
+
+  async updatePayment(orderId: string, data: Partial<Payment>): Promise<Payment | undefined> {
+    const [record] = await db.update(payments).set(data).where(eq(payments.razorpayOrderId, orderId)).returning();
+    return record;
+  }
+
+  async getAllPayments(): Promise<Payment[]> {
+    return db.select().from(payments).orderBy(desc(payments.createdAt));
+  }
+
+  // ── Processing jobs ─────────────────────────────────────────────────────────
 
   async createJob(id: string, message: string): Promise<void> {
     await db.insert(processingJobs).values({ id, status: "processing", progress: 5, message });
@@ -502,25 +554,6 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJob(id: string): Promise<void> {
     await db.delete(processingJobs).where(eq(processingJobs.id, id));
-  }
-
-  async createPayment(data: InsertPayment): Promise<Payment> {
-    const [record] = await db.insert(payments).values(data).returning();
-    return record;
-  }
-  async getPaymentByOrderId(orderId: string): Promise<Payment | undefined> {
-    const [record] = await db.select().from(payments).where(eq(payments.razorpayOrderId, orderId));
-    return record;
-  }
-  async getPaymentsByAgency(agencyCode: string): Promise<Payment[]> {
-    return db.select().from(payments).where(eq(payments.agencyCode, agencyCode)).orderBy(desc(payments.createdAt));
-  }
-  async updatePayment(orderId: string, data: Partial<Payment>): Promise<Payment | undefined> {
-    const [record] = await db.update(payments).set(data).where(eq(payments.razorpayOrderId, orderId)).returning();
-    return record;
-  }
-  async getAllPayments(): Promise<Payment[]> {
-    return db.select().from(payments).orderBy(desc(payments.createdAt));
   }
 }
 

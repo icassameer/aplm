@@ -8,6 +8,7 @@ export const planEnum = ["BASIC", "PRO", "ENTERPRISE"] as const;
 export const leadStatusEnum = ["NEW", "CONTACTED", "FOLLOW_UP", "CONVERTED", "NOT_INTERESTED"] as const;
 export const userStatusEnum = ["ACTIVE", "INACTIVE", "PENDING_APPROVAL"] as const;
 export const upgradeRequestStatusEnum = ["PENDING", "APPROVED", "DENIED"] as const;
+export const subscriptionStatusEnum = ["TRIAL", "ACTIVE", "EXPIRED", "SUSPENDED"] as const;
 
 export const agencies = pgTable("agencies", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -18,9 +19,18 @@ export const agencies = pgTable("agencies", {
   leadLimit: integer("lead_limit").notNull().default(500),
   userLimit: integer("user_limit").notNull().default(10),
   planAssignedAt: timestamp("plan_assigned_at").defaultNow(),
+  // ─── Subscription fields ───────────────────────────────────────
+  subscriptionStatus: text("subscription_status").notNull().default("TRIAL"),
+  subscriptionExpiry: timestamp("subscription_expiry"),
+  lastPaymentId: text("last_payment_id"),
+  lastPaymentAt: timestamp("last_payment_at"),
+  lastPaymentAmount: integer("last_payment_amount"),
+  // ──────────────────────────────────────────────────────────────
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("agencies_code_idx").on(table.agencyCode),
+  index("agencies_sub_status_idx").on(table.subscriptionStatus),
+  index("agencies_sub_expiry_idx").on(table.subscriptionExpiry),
 ]);
 
 export const users = pgTable("users", {
@@ -146,7 +156,6 @@ export const rcRecords = pgTable("rc_records", {
 
 export { conversations, messages } from "./models/chat";
 
-
 export const payments = pgTable("payments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   agencyCode: text("agency_code").notNull(),
@@ -155,9 +164,11 @@ export const payments = pgTable("payments", {
   amount: integer("amount").notNull(),
   currency: text("currency").notNull().default("INR"),
   plan: text("plan").notNull(),
+  razorpaySignature: text("razorpay_signature"),
   status: text("status").notNull().default("PENDING"),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("payments_agency_idx").on(table.agencyCode),
   index("payments_status_idx").on(table.status),
@@ -203,14 +214,14 @@ export type InsertUpgradeRequest = z.infer<typeof insertUpgradeRequestSchema>;
 export type Role = typeof roleEnum[number];
 export type Plan = typeof planEnum[number];
 export type LeadStatus = typeof leadStatusEnum[number];
+export type SubscriptionStatus = typeof subscriptionStatusEnum[number];
 export type RcRecord = typeof rcRecords.$inferSelect;
 export const insertRcRecordSchema = createInsertSchema(rcRecords).omit({ id: true, createdAt: true });
 export type InsertRcRecord = z.infer<typeof insertRcRecordSchema>;
 
-// Processing jobs table — shared across PM2 cluster instances
 export const processingJobs = pgTable("processing_jobs", {
   id: text("id").primaryKey(),
-  status: text("status").notNull().default("processing"), // processing | done | error
+  status: text("status").notNull().default("processing"),
   progress: integer("progress").notNull().default(0),
   message: text("message").notNull().default(""),
   result: jsonb("result"),

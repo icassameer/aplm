@@ -1958,7 +1958,188 @@ Return ONLY valid JSON, no markdown, no explanation.`
       res.status(500).json({ success: false, message: "Internal server error" });
     }
   });
+  // ── Subscription Status ───────────────────────────────────────────────────
+  // GET /api/subscription/status
+  app.get("/api/subscription/status", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const { agencyCode, role } = req.user!;
+      if (role === "MASTER_ADMIN") {
+        return res.json({ success: true, data: { status: "ACTIVE", isMaster: true } });
+      }
+      if (!agencyCode) return res.status(400).json({ success: false, message: "No agency" });
 
+      const agency = await storage.getAgencyByCode(agencyCode);
+      if (!agency) return res.status(404).json({ success: false, message: "Agency not found" });
+
+      const now = new Date();
+      const expiry = agency.subscriptionExpiry ? new Date(agency.subscriptionExpiry) : null;
+      const daysLeft = expiry ? Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+      const isExpired = expiry ? now > expiry : false;
+
+      // Auto-mark expired in DB
+      if (isExpired && agency.subscriptionStatus === "ACTIVE") {
+        await storage.updateAgencyByCode(agencyCode, { subscriptionStatus: "EXPIRED" });
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          plan: agency.plan,
+          status: isExpired ? "EXPIRED" : (agency.subscriptionStatus || "TRIAL"),
+          expiry: expiry?.toISOString() || null,
+          daysLeft: isExpired ? 0 : daysLeft,
+          isExpired,
+          isTrial: agency.subscriptionStatus === "TRIAL" || !agency.subscriptionStatus,
+        }
+      });
+    } catch (error: any) {
+      console.error("Subscription status error:", error);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // ── Manual Extend Subscription (MASTER_ADMIN) ─────────────────────────────
+  // POST /api/subscription/extend
+  app.post("/api/subscription/extend", authMiddleware, roleMiddleware("MASTER_ADMIN"), async (req: AuthRequest, res: Response) => {
+    try {
+      const { agencyCode, days = 30, plan } = req.body;
+      if (!agencyCode) return res.status(400).json({ success: false, message: "agencyCode required" });
+
+      const agency = await storage.getAgencyByCode(agencyCode);
+      if (!agency) return res.status(404).json({ success: false, message: "Agency not found" });
+
+      // Extend from current expiry (if future) or from now
+      const base = agency.subscriptionExpiry && new Date(agency.subscriptionExpiry) > new Date()
+        ? new Date(agency.subscriptionExpiry)
+        : new Date();
+
+      const newExpiry = new Date(base);
+      newExpiry.setDate(newExpiry.getDate() + parseInt(days));
+
+      const updateData: any = {
+        subscriptionStatus: "ACTIVE",
+        subscriptionExpiry: newExpiry,
+      };
+      if (plan) updateData.plan = plan.toUpperCase();
+
+      await storage.updateAgencyByCode(agencyCode, updateData);
+
+      await storage.createAuditLog({
+        agencyCode,
+        leadId: null,
+        userId: req.user!.id,
+        action: "SUBSCRIPTION_EXTENDED",
+        oldStatus: agency.subscriptionStatus || "TRIAL",
+        newStatus: "ACTIVE",
+        remarks: `Extended by ${days} days. New expiry: ${newExpiry.toDateString()}${plan ? ` | Plan changed to: ${plan}` : ""}`,
+        targetUserId: null,
+      });
+
+      return res.json({
+        success: true,
+        data: {
+          agencyCode,
+          newExpiry: newExpiry.toISOString(),
+          daysExtended: parseInt(days),
+          plan: plan || agency.plan,
+        }
+      });
+    } catch (error: any) {
+      console.error("Extend subscription error:", error);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // ── Subscription Webhook (Razorpay payment.captured) ──────────────────────
+  // This extends the subscription on successful payment from website or CRM
+  // POST /api/subscription/webhook
+  app.post("/api/subscription/webhook", express.raw({ type: "application/json" }), async (req: Request, res: Response) => {
+    try {
+      const signature = req.headers["x-razorpay-signature"] as string;
+      const webhookSecret = process.env.RAZORPAY_KEY_SECRET!;
+
+      // Verify signature
+      if (webhookSecret && signature) {
+        const expectedSig = crypto.createHmac("sha256", webhookSecret).update(req.body).digest("hex");
+        if (expectedSig !== signature) {
+          console.error("Subscription webhook: signature mismatch");
+          return res.status(400).json({ success: false, message: "Invalid signature" });
+        }
+      }
+
+      const event = JSON.parse(req.body.toString());
+      console.log("[Subscription Webhook] Event:", event.event);
+
+      if (event.event === "payment.captured") {
+        const payment = event.payload.payment.entity;
+        const notes = payment.notes || {};
+        const agencyCode = notes.agency_code;
+        const plan = (notes.plan || "BASIC").toUpperCase();
+        const paymentId = payment.id;
+        const amount = payment.amount;
+
+        if (!agencyCode) {
+          console.log("[Subscription Webhook] No agency_code in notes — skipping auto-activate");
+          return res.status(200).json({ success: true });
+        }
+
+        const agency = await storage.getAgencyByCode(agencyCode);
+        if (!agency) {
+          console.error("[Subscription Webhook] Agency not found:", agencyCode);
+          return res.status(200).json({ success: true });
+        }
+
+        // Extend subscription 30 days from now or from current expiry
+        const base = agency.subscriptionExpiry && new Date(agency.subscriptionExpiry) > new Date()
+          ? new Date(agency.subscriptionExpiry)
+          : new Date();
+        const newExpiry = new Date(base);
+        newExpiry.setDate(newExpiry.getDate() + 30);
+
+        await storage.updateAgencyByCode(agencyCode, {
+          plan,
+          subscriptionStatus: "ACTIVE",
+          subscriptionExpiry: newExpiry,
+          planAssignedAt: new Date(),
+        });
+
+        // Save payment record
+        try {
+          await storage.createPaymentRecord({
+            agencyCode,
+            razorpayOrderId: payment.order_id || paymentId,
+            razorpayPaymentId: paymentId,
+            amount,
+            currency: payment.currency || "INR",
+            plan,
+            status: "CAPTURED",
+            createdBy: notes.user_id || "webhook",
+          });
+        } catch (e) {
+          console.error("[Subscription Webhook] Payment record save failed:", e);
+        }
+
+        // Audit log
+        await storage.createAuditLog({
+          agencyCode,
+          leadId: null,
+          userId: "webhook",
+          action: "SUBSCRIPTION_ACTIVATED_VIA_PAYMENT",
+          oldStatus: agency.subscriptionStatus || "TRIAL",
+          newStatus: "ACTIVE",
+          remarks: `Plan: ${plan} | Payment ID: ${paymentId} | Expires: ${newExpiry.toDateString()} | Amount: ₹${amount / 100}`,
+          targetUserId: null,
+        });
+
+        console.log(`[Subscription Webhook] Activated: ${agencyCode} → ${plan} until ${newExpiry.toDateString()}`);
+      }
+
+      return res.status(200).json({ success: true });
+    } catch (error: any) {
+      console.error("[Subscription Webhook] Error:", error);
+      return res.status(200).json({ success: true }); // Always 200 to Razorpay
+    }
+  });
 
   return httpServer;
 }

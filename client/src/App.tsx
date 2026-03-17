@@ -10,6 +10,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Bell, AlertTriangle, Info } from "lucide-react";
+import SubscriptionBanner from "@/components/SubscriptionBanner";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
 import DashboardPage from "@/pages/dashboard";
@@ -132,7 +133,7 @@ function AuthenticatedLayout() {
     return (
       <Switch>
         <Route path="/login" component={LoginPage} />
-            <Route path="/payment" component={PaymentPage} />
+        <Route path="/payment" component={PaymentPage} />
         <Route><Redirect to="/login" /></Route>
       </Switch>
     );
@@ -152,6 +153,8 @@ function AuthenticatedLayout() {
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <NotificationBell />
           </header>
+          {/* ── Subscription expiry banner — shows when ≤7 days left, expired, or trial ── */}
+          <SubscriptionBanner />
           <main className="flex-1 overflow-auto">
             <Switch>
               <Route path="/">
@@ -173,7 +176,7 @@ function AuthenticatedLayout() {
                 <ProtectedRoute component={PerformancePage} allowedRoles={["AGENCY_ADMIN", "TEAM_LEADER", "TELE_CALLER"]} />
               </Route>
               <Route path="/meetings">
-                <ProtectedRoute component={MeetingsPage} allowedRoles={["AGENCY_ADMIN", "MASTER_ADMIN","TEAM_LEADER"]} />
+                <ProtectedRoute component={MeetingsPage} allowedRoles={["AGENCY_ADMIN", "MASTER_ADMIN", "TEAM_LEADER"]} />
               </Route>
               <Route path="/services">
                 <ProtectedRoute component={ServicesPage} allowedRoles={["AGENCY_ADMIN"]} />
