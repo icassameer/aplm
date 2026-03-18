@@ -130,6 +130,7 @@ RAZORPAY_KEY_SECRET=<live secret>
 | Razorpay webhook auto-activate | ✅ | Payment → expiry +30 days |
 | Manual extend (MASTER_ADMIN) | ✅ | POST /api/subscription/extend |
 | Subscription emails | ✅ | Confirmation, reminder, expired |
+| Daily subscription cron | ✅ | setInterval in server/index.ts — fires on startup + every 24h |
 
 ---
 
@@ -142,9 +143,11 @@ Razorpay fires → /api/subscription/webhook
         ↓
 Verify signature → find agency → set expiry = today + 30 days
         ↓
-Day 23 → 7-day reminder email
-Day 29 → 1-day urgent reminder email
+Day 23 → 7-day reminder email  (cron: daysLeft === 7)
+Day 29 → 1-day urgent reminder  (cron: daysLeft === 1)
 Day 30 → expired → banner in CRM → Renew button
+        ↓
+cron: daysLeft ≤ 0 → SET subscription_status='EXPIRED', is_active=false → send expired email
         ↓
 Customer pays → webhook fires → expiry + 30 more days
 ```
@@ -164,17 +167,48 @@ POST /api/subscription/webhook   → Razorpay auto-activate
 
 ---
 
+## ⏱️ Daily Cron — Implementation Details
+
+The cron lives in `server/index.ts` inside the `(async () => { ... })()` bootstrap block.
+
+**Key design decisions:**
+- `import "dotenv/config"` MUST be the first import in `server/index.ts` — before email imports — so `RESEND_API_KEY` is loaded before Resend initializes
+- Uses raw `db.execute(sql`...`)` with a JOIN query to get agency + AGENCY_ADMIN email in one shot
+- Deduplicates by `agency_code` (in case an agency has multiple AGENCY_ADMINs)
+- PM2 cluster safe — idempotent: checks `subscription_status !== 'EXPIRED'` before updating
+- Fires 10 seconds after startup, then every 24 hours
+
+**Email functions** (in `server/email.ts`):
+- `sendSubscriptionReminderEmail(agencyName, to, fullName, plan, daysLeft, expiresAt)`
+- `sendSubscriptionExpiredEmail(agencyName, to, fullName, plan)`
+
+**To set subscription expiry for a new agency:**
+```sql
+UPDATE agencies
+SET subscription_status = 'ACTIVE',
+    subscription_expiry = NOW() + INTERVAL '30 days'
+WHERE agency_code = 'ICA-XXXXXX';
+```
+
+**To verify cron is running:**
+```bash
+pm2 logs ica-crm --lines 10
+# Look for: [cron] Subscription cron done — X agencies checked
+```
+
+---
+
 ## 📧 Email Triggers (Resend)
 
-| Email | Trigger |
-|-------|---------|
-| Welcome | New agency admin created |
-| Prospect Inquiry | Manual by MASTER_ADMIN |
-| Plan Upgrade | MASTER_ADMIN approves upgrade |
-| Payment Confirmation | Webhook payment.captured |
-| 7-day Reminder | Daily cron — 7 days before expiry |
-| 1-day Reminder | Daily cron — 1 day before expiry |
-| Plan Expired | Daily cron — on expiry date |
+| Email | Trigger | Function |
+|-------|---------|----------|
+| Welcome | New agency admin created | `sendWelcomeEmail` |
+| Prospect Inquiry | Manual by MASTER_ADMIN | `sendProspectEmail` |
+| Plan Upgrade | MASTER_ADMIN approves upgrade | `sendPlanUpgradeEmail` |
+| Payment Confirmation | Webhook payment.captured | `sendPaymentSuccessEmail` |
+| 7-day Reminder | Daily cron — daysLeft === 7 | `sendSubscriptionReminderEmail` |
+| 1-day Reminder | Daily cron — daysLeft === 1 | `sendSubscriptionReminderEmail` |
+| Plan Expired | Daily cron — daysLeft ≤ 0 | `sendSubscriptionExpiredEmail` |
 
 ---
 
@@ -188,10 +222,10 @@ pm2 status
 pm2 logs ica-crm --lines 50
 
 # Deploy
-git pull origin master && npm run build && pm2 restart all
+git pull origin master && npm run build && pm2 restart all --update-env
 
 # Edit env
-nano /var/www/ica-crm/.env && pm2 restart all
+nano /var/www/ica-crm/.env && pm2 restart all --update-env
 
 # DB
 psql -U postgres -h localhost -d ica_crm
@@ -200,9 +234,14 @@ psql -U postgres -h localhost -d ica_crm
 psql -U postgres -h localhost -d ica_crm -c \
   "SELECT name, plan, subscription_status, subscription_expiry FROM agencies;"
 
+# Exit psql
+\q
+
 # SSL
 certbot renew
 ```
+
+> ⚠️ Always use `pm2 restart all --update-env` when .env has changed
 
 ---
 
@@ -210,6 +249,7 @@ certbot renew
 
 | File | Path |
 |------|------|
+| Backend entry + cron | server/index.ts |
 | Backend routes | server/routes.ts |
 | Email functions | server/email.ts |
 | DB schema | shared/schema.ts |
@@ -230,11 +270,14 @@ certbot renew
 
 | Problem | Solution |
 |---------|---------|
-| Site not loading | `pm2 restart all` |
+| Site not loading | `pm2 restart all --update-env` |
 | Agencies page 500 | `ALTER TABLE agencies ADD COLUMN IF NOT EXISTS last_payment_id text, ADD COLUMN IF NOT EXISTS last_payment_at timestamp, ADD COLUMN IF NOT EXISTS last_payment_amount integer;` then restart |
 | Subscription not activating | Check RAZORPAY_KEY_SECRET in .env matches Razorpay webhook secret |
 | Webhook not firing | Razorpay dashboard → Webhooks → both must be Enabled |
-| Emails not sending | Check RESEND_API_KEY in .env |
+| Emails not sending | Check RESEND_API_KEY in .env; use `pm2 restart all --update-env` |
+| Cron error: f is not a function | dotenv import must be FIRST line in server/index.ts, before email import |
+| Cron shows 0 agencies checked | Run: `UPDATE agencies SET subscription_expiry = NOW() + INTERVAL '30 days' WHERE subscription_expiry IS NULL;` |
+| App not picking up .env changes | Always use `pm2 restart all --update-env` not just `pm2 restart all` |
 | SSL expired | `certbot renew && systemctl reload nginx` |
 | DB connection failed | Check DATABASE_URL in .env |
 
@@ -245,7 +288,7 @@ certbot renew
 | Task | Priority |
 |------|----------|
 | RC API key (Surepass) — ₹25k deposit | 🔴 High |
-| Daily subscription cron in server/index.ts | 🔴 High |
+| Onboard APLM + ICA with real users | 🔴 High |
 | Add-on packs checkout (RC + AI credits) | 🟡 Medium |
 | Payment history page | 🟡 Medium |
 | Auto-reply support@icaweb.in | 🟡 Medium |
@@ -256,6 +299,7 @@ certbot renew
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v7.0 | Mar 18, 2026 | Daily subscription cron live — 7-day/1-day reminders + auto-expire; fixed dotenv import order; added sendSubscriptionReminderEmail + sendSubscriptionExpiredEmail to email.ts |
 | v6.0 | Mar 17, 2026 | Subscription expiry system, 30-day billing, Razorpay webhook auto-activate, renewal banner, subscription emails, DB migration |
 | v5.0 | Mar 2026 | Marketing website, Razorpay live payments, privacy policy, edit agency limits |
 | v4.0 | Mar 2026 | Resend email integration, plan upgrade email, VS Code SSH |
@@ -265,4 +309,4 @@ certbot renew
 
 ---
 
-*Last updated: March 17, 2026 | v6.0 | Sameer | ICA — Innovation, Consulting & Automation*
+*Last updated: March 18, 2026 | v7.0 | Sameer | ICA — Innovation, Consulting & Automation*
