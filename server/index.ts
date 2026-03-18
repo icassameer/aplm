@@ -1,3 +1,4 @@
+import { sendSubscriptionReminderEmail, sendSubscriptionExpiredEmail } from "./email";
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import rateLimit from "express-rate-limit";
@@ -7,6 +8,8 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import jwt from "jsonwebtoken";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -170,7 +173,87 @@ app.use((req, res, next) => {
         : err.message || "An error occurred";
     return res.status(status).json({ success: false, message });
   });
+  // ─── Daily Subscription Cron ────────────────────────────────────────────────
+  // PM2 cluster-safe: uses DB raw query so only processes each agency once.
+  // Runs 10s after startup, then every 24 hours.
+  async function runSubscriptionCron() {
+    try {
+      log("Subscription cron started", "cron");
 
+      const { rows } = await db.execute(sql`
+        SELECT 
+          a.id,
+          a.name,
+          a.agency_code,
+          a.plan,
+          a.subscription_status,
+          a.subscription_expiry,
+          u.email,
+          u.full_name
+        FROM agencies a
+        LEFT JOIN users u 
+          ON u.agency_code = a.agency_code 
+          AND u.role = 'AGENCY_ADMIN' 
+          AND u.status = 'ACTIVE'
+        WHERE a.subscription_expiry IS NOT NULL
+        ORDER BY a.agency_code, u.created_at ASC
+      `);
+
+      // Deduplicate: one row per agency (first AGENCY_ADMIN found)
+      const seen = new Set<string>();
+      const agencyRows = (rows as any[]).filter(r => {
+        if (seen.has(r.agency_code)) return false;
+        seen.add(r.agency_code);
+        return true;
+      });
+
+      const now = new Date();
+      
+      for (const row of agencyRows) {
+        if (!row.email) continue; // skip if no AGENCY_ADMIN with email
+
+        const expiry = new Date(row.subscription_expiry);
+        const msLeft = expiry.getTime() - now.getTime();
+        const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+
+        if (daysLeft <= 0 && row.subscription_status !== "EXPIRED") {
+          // Expire the agency
+          await db.execute(sql`
+            UPDATE agencies 
+            SET subscription_status = 'EXPIRED', is_active = false
+            WHERE agency_code = ${row.agency_code}
+          `);
+          await sendSubscriptionExpiredEmail(
+            row.name, row.email, row.full_name, row.plan
+          );
+          log(`Expired → ${row.agency_code} (${row.email})`, "cron");
+
+        } else if (daysLeft === 1) {
+          await sendSubscriptionReminderEmail(
+            row.name, row.email, row.full_name, row.plan, 1, expiry
+          );
+          log(`1-day reminder → ${row.agency_code} (${row.email})`, "cron");
+
+        } else if (daysLeft === 7) {
+          await sendSubscriptionReminderEmail(
+            row.name, row.email, row.full_name, row.plan, 7, expiry
+          );
+          log(`7-day reminder → ${row.agency_code} (${row.email})`, "cron");
+        }
+      }
+
+      log(`Subscription cron done — ${agencyRows.length} agencies checked`, "cron");
+    } catch (err) {
+      log(`Subscription cron error: ${err}`, "cron");
+    }
+  }
+
+  // 10s startup delay (lets DB + routes settle), then every 24h
+  setTimeout(() => {
+    runSubscriptionCron();
+    setInterval(runSubscriptionCron, 24 * 60 * 60 * 1000);
+  }, 10_000);
+  // ─────────────────────────────────────────────────────────────────────────────
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);
   } else {
