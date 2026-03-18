@@ -81,10 +81,10 @@ RAZORPAY_KEY_SECRET=<live secret>
 
 | Role | Access |
 |------|--------|
-| MASTER_ADMIN | Full system — all agencies, users, plans, upgrade approvals, subscription management |
-| AGENCY_ADMIN | Own agency — leads, users, AI Proceeding, RC lookup, reports, plan upgrades, payments, AI Tools |
-| TEAM_LEADER | Add leads, bulk upload, assign leads to telecallers, view team performance, AI Tools |
-| TELE_CALLER | Own assigned leads only — add/edit/call/WhatsApp/update status, AI Tools |
+| MASTER_ADMIN | Full system — all agencies, users, plans, upgrade approvals, subscription management, payment history |
+| AGENCY_ADMIN | Own agency — leads, users, AI Proceeding, RC lookup, reports, plan upgrades, AI Tools (PRO+) |
+| TEAM_LEADER | Add leads, bulk upload, assign leads to telecallers, view team performance, AI Tools (PRO+) |
+| TELE_CALLER | Own assigned leads only — update status, remarks, WhatsApp, inline AI buttons (PRO+) |
 
 > TEAM_LEADER is the **only** role that can assign leads to telecallers.
 
@@ -99,6 +99,7 @@ RAZORPAY_KEY_SECRET=<live secret>
 | AI Proceeding | ❌ | 15/month | 40/month |
 | RC Lookup | ❌ | 50/month | 200/month |
 | AI Tools (Remarks + Follow-up + Scoring) | ❌ | ✅ | ✅ |
+| Inline AI on Lead Cards | ❌ | ✅ | ✅ |
 | AI Chatbot | ❌ | ❌ | ✅ |
 | WhatsApp | ✅ | ✅ | ✅ |
 | Automated Emails | ✅ | ✅ | ✅ |
@@ -136,15 +137,27 @@ RAZORPAY_KEY_SECRET=<live secret>
 | Subscription emails | ✅ | Confirmation, reminder, expired |
 | Daily subscription cron | ✅ | setInterval in server/index.ts — fires on startup + every 24h |
 | Payment History page | ✅ | MASTER_ADMIN — all Razorpay transactions with status |
-| AI Smart Remark Suggestions | ✅ | Claude Haiku — PRO + ENTERPRISE |
-| AI Follow-up Message Generator | ✅ | Claude Haiku — WhatsApp + Call script — PRO + ENTERPRISE |
-| AI Lead Scoring | ✅ | Claude Haiku — 1-100 score + Hot/Warm/Cold label — PRO + ENTERPRISE |
+| AI Smart Remark Suggestions | ✅ | Claude Haiku — PRO + ENTERPRISE — AI Tools page + inline on leads |
+| AI Follow-up Message Generator | ✅ | Claude Haiku — WhatsApp + Call script — AI Tools page + inline on leads |
+| AI Lead Scoring | ✅ | Claude Haiku — 1-100 score + Hot/Warm/Cold label — AI Tools page |
 | AI CRM Chatbot | ✅ | Claude Sonnet — live CRM context — ENTERPRISE only |
 | AI Tools page | ✅ | Dedicated page — all roles — /ai-tools |
+| Inline AI buttons on lead cards | ✅ | ✨ sparkle button — suggest remark + WhatsApp message — TELE_CALLER + TEAM_LEADER |
 
 ---
 
 ## 🤖 AI Suite — Feature Details
+
+### Overview
+- **AI Tools page** (`/ai-tools`) — standalone page with all 4 AI tools
+- **Inline AI on lead cards** — ✨ sparkle button on every assigned lead card
+
+### Inline AI on Lead Cards
+Telecallers see a purple ✨ button next to Update on each assigned lead. Clicking opens an AI panel below the card:
+- **Suggest remark** — professional call remark based on lead name, service, outcome
+- **WhatsApp message** — ready-to-send Hinglish/English message
+- Both have a **copy button** — one click to clipboard, paste directly into WhatsApp
+- Panel toggles open/close on sparkle button click
 
 ### API Endpoints
 ```
@@ -160,16 +173,12 @@ POST /api/ai/chat               → CRM AI assistant with live data (Sonnet)
 | Smart Remarks | ❌ | ✅ | ✅ |
 | Follow-up Generator | ❌ | ✅ | ✅ |
 | Lead Scoring | ❌ | ✅ | ✅ |
+| Inline AI on leads | ❌ | ✅ | ✅ |
 | AI Chatbot | ❌ | ❌ | ✅ |
 
 ### Models Used
-- **Claude Haiku** (`claude-haiku-4-5-20251001`) — Remarks, Follow-up, Scoring. Fast + cheap (~₹0.001/call)
-- **Claude Sonnet** (`claude-sonnet-4-6`) — Chatbot. More powerful (~₹0.05/message)
-
-### Estimated API Cost
-- 2 agencies, ~50 users: **₹200–500/month**
-- 20 agencies: **₹2,000–3,000/month**
-- Self-funded by PRO/ENTERPRISE subscription revenue
+- **Claude Haiku** (`claude-haiku-4-5-20251001`) — Remarks, Follow-up, Scoring (~₹0.001/call)
+- **Claude Sonnet** (`claude-sonnet-4-6`) — Chatbot (~₹0.05/message)
 
 ### Troubleshooting AI Features
 | Problem | Solution |
@@ -177,6 +186,7 @@ POST /api/ai/chat               → CRM AI assistant with live data (Sonnet)
 | AI returns 403 | Agency is on BASIC plan — upgrade required |
 | AI chatbot 403 | ENTERPRISE plan required |
 | AI service error 500 | Check ANTHROPIC_API_KEY in .env → `pm2 restart all --update-env` |
+| Sparkle button not showing | Lead must be assigned to that telecaller + hard refresh (Ctrl+Shift+R) |
 
 ---
 
@@ -217,16 +227,15 @@ POST /api/subscription/webhook   → Razorpay auto-activate
 
 The cron lives in `server/index.ts` inside the `(async () => { ... })()` bootstrap block.
 
-**Key design decisions:**
-- `import "dotenv/config"` MUST be the first import in `server/index.ts` — before email imports — so `RESEND_API_KEY` is loaded before Resend initializes
-- Uses raw `db.execute(sql`...`)` with a JOIN query to get agency + AGENCY_ADMIN email in one shot
-- Deduplicates by `agency_code` (in case an agency has multiple AGENCY_ADMINs)
-- PM2 cluster safe — idempotent: checks `subscription_status !== 'EXPIRED'` before updating
+- `import "dotenv/config"` MUST be the first import in `server/index.ts`
+- PM2 cluster safe — idempotent checks before updating
 - Fires 10 seconds after startup, then every 24 hours
 
-**Email functions** (in `server/email.ts`):
-- `sendSubscriptionReminderEmail(agencyName, to, fullName, plan, daysLeft, expiresAt)`
-- `sendSubscriptionExpiredEmail(agencyName, to, fullName, plan)`
+**To verify cron is running:**
+```bash
+pm2 logs ica-crm --lines 10
+# Look for: [cron] Subscription cron done — X agencies checked
+```
 
 **To set subscription expiry for a new agency:**
 ```sql
@@ -234,12 +243,6 @@ UPDATE agencies
 SET subscription_status = 'ACTIVE',
     subscription_expiry = NOW() + INTERVAL '30 days'
 WHERE agency_code = 'ICA-XXXXXX';
-```
-
-**To verify cron is running:**
-```bash
-pm2 logs ica-crm --lines 10
-# Look for: [cron] Subscription cron done — X agencies checked
 ```
 
 ---
@@ -280,12 +283,6 @@ psql -U postgres -h localhost -d ica_crm
 psql -U postgres -h localhost -d ica_crm -c \
   "SELECT name, plan, subscription_status, subscription_expiry FROM agencies;"
 
-# Exit psql
-\q
-
-# SSL
-certbot renew
-
 # Git tags / milestones
 git tag -a vX.X -m "Description"
 git push origin vX.X
@@ -309,10 +306,11 @@ npm run build && pm2 restart all --update-env
 | DB schema | shared/schema.ts |
 | Storage layer | server/storage.ts |
 | Main app layout | client/src/App.tsx |
-| Subscription banner | client/src/components/SubscriptionBanner.tsx |
-| Sidebar nav | client/src/components/app-sidebar.tsx |
+| Leads page (inline AI) | client/src/pages/leads.tsx |
 | AI Tools page | client/src/pages/ai-tools.tsx |
 | Payment History page | client/src/pages/payment-history.tsx |
+| Subscription banner | client/src/components/SubscriptionBanner.tsx |
+| Sidebar nav | client/src/components/app-sidebar.tsx |
 | Nginx (CRM) | /etc/nginx/sites-enabled/ica-crm |
 | Nginx (website) | /etc/nginx/sites-enabled/icaweb-in |
 | Marketing website | /var/www/icaweb-in/index.html |
@@ -327,18 +325,17 @@ npm run build && pm2 restart all --update-env
 | Problem | Solution |
 |---------|---------|
 | Site not loading | `pm2 restart all --update-env` |
-| Agencies page 500 | `ALTER TABLE agencies ADD COLUMN IF NOT EXISTS last_payment_id text, ADD COLUMN IF NOT EXISTS last_payment_at timestamp, ADD COLUMN IF NOT EXISTS last_payment_amount integer;` then restart |
+| 502 Bad Gateway | `curl http://localhost:5000/api/auth/me` — if fails run `npm run build && pm2 restart all --update-env` |
+| Build failed (JSX error) | `npm run build 2>&1 \| grep ERROR` — fix file then rebuild |
 | Subscription not activating | Check RAZORPAY_KEY_SECRET in .env matches Razorpay webhook secret |
-| Webhook not firing | Razorpay dashboard → Webhooks → both must be Enabled |
 | Emails not sending | Check RESEND_API_KEY in .env; use `pm2 restart all --update-env` |
-| Cron error: f is not a function | dotenv import must be FIRST line in server/index.ts, before email import |
-| Cron shows 0 agencies checked | Run: `UPDATE agencies SET subscription_expiry = NOW() + INTERVAL '30 days' WHERE subscription_expiry IS NULL;` |
-| App not picking up .env changes | Always use `pm2 restart all --update-env` not just `pm2 restart all` |
+| Cron error: f is not a function | dotenv import must be FIRST line in server/index.ts |
+| App not picking up .env changes | Always use `pm2 restart all --update-env` |
 | SSL expired | `certbot renew && systemctl reload nginx` |
-| DB connection failed | Check DATABASE_URL in .env |
-| AI returns 403 | Agency on BASIC plan — PRO/ENTERPRISE required |
-| AI chatbot 403 | ENTERPRISE plan required for chatbot |
-| AI service error | Check ANTHROPIC_API_KEY in .env → `pm2 restart all --update-env` |
+| AI returns 403 | Agency on BASIC plan — PRO or ENTERPRISE required |
+| AI chatbot 403 | ENTERPRISE plan required |
+| AI service error 500 | Check ANTHROPIC_API_KEY in .env → restart |
+| Sparkle button not showing | Lead must be assigned to telecaller + hard refresh (Ctrl+Shift+R) |
 
 ---
 
@@ -346,13 +343,14 @@ npm run build && pm2 restart all --update-env
 
 | Tag | Description |
 |-----|-------------|
+| `v8.1` | Inline AI buttons on lead cards — ✨ sparkle button with remark + WhatsApp generator |
 | `v8.0` | AI Suite launch — Smart Remarks, Follow-up Generator, Lead Scoring, CRM Chatbot, Payment History |
 | `v7.0` | Daily subscription cron, expiry emails |
 | `v6.0` | Subscription system, Razorpay webhook, renewal banner |
 
 **To rollback to any milestone:**
 ```bash
-git checkout v8.0
+git checkout v8.1
 npm run build && pm2 restart all --update-env
 ```
 
@@ -364,7 +362,6 @@ npm run build && pm2 restart all --update-env
 |------|----------|
 | RC API key (Surepass) — ₹25k deposit | 🔴 High |
 | Onboard APLM + ICA with real users | 🔴 High |
-| Inline AI buttons in Leads page | 🟡 Medium |
 | Add-on packs checkout (RC + AI credits) | 🟡 Medium |
 | Auto-reply support@icaweb.in | 🟡 Medium |
 
@@ -374,9 +371,10 @@ npm run build && pm2 restart all --update-env
 
 | Version | Date | Changes |
 |---------|------|---------|
-| v8.0 | Mar 18, 2026 | AI Suite — Smart Remark Suggestions, Follow-up Message Generator, Lead Scoring (Claude Haiku), CRM AI Chatbot (Claude Sonnet). Payment History page (MASTER_ADMIN). Git milestone tagging introduced. ANTHROPIC_API_KEY added to .env. |
-| v7.0 | Mar 18, 2026 | Daily subscription cron live — 7-day/1-day reminders + auto-expire; fixed dotenv import order; added sendSubscriptionReminderEmail + sendSubscriptionExpiredEmail to email.ts |
-| v6.0 | Mar 17, 2026 | Subscription expiry system, 30-day billing, Razorpay webhook auto-activate, renewal banner, subscription emails, DB migration |
+| v8.1 | Mar 18, 2026 | Inline AI buttons on lead cards — ✨ sparkle button for TELE_CALLER + TEAM_LEADER. Suggest remark + WhatsApp message generator directly on each lead card with copy-to-clipboard. |
+| v8.0 | Mar 18, 2026 | AI Suite — Smart Remark Suggestions, Follow-up Message Generator, Lead Scoring (Claude Haiku), CRM AI Chatbot (Claude Sonnet). Payment History page. Git milestone tagging. ANTHROPIC_API_KEY added. |
+| v7.0 | Mar 18, 2026 | Daily subscription cron live — 7-day/1-day reminders + auto-expire; fixed dotenv import order |
+| v6.0 | Mar 17, 2026 | Subscription expiry system, 30-day billing, Razorpay webhook auto-activate, renewal banner |
 | v5.0 | Mar 2026 | Marketing website, Razorpay live payments, privacy policy, edit agency limits |
 | v4.0 | Mar 2026 | Resend email integration, plan upgrade email, VS Code SSH |
 | v3.0 | Mar 2026 | RC Lookup UI, plan limits, WhatsApp, VPS deployment, SSL |
@@ -385,4 +383,4 @@ npm run build && pm2 restart all --update-env
 
 ---
 
-*Last updated: March 18, 2026 | v8.0 | Sameer | ICA — Innovation, Consulting & Automation*
+*Last updated: March 18, 2026 | v8.1 | Sameer | ICA — Innovation, Consulting & Automation*
