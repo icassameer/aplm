@@ -16,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Phone, Plus, ChevronLeft, ChevronRight, Filter, Search,
   UserCheck, Clock, CheckCircle2, XCircle, AlertCircle,
-  Upload, Download, Briefcase, MessageCircle,
+  Upload, Download, Briefcase, Sparkles, Copy, Check, MessageCircle,
 } from "lucide-react";
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
@@ -32,6 +32,47 @@ export default function LeadsPage() {
   const { apiFetch } = useApi();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [aiOpenLeadId, setAiOpenLeadId] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState<string | null>(null);
+  const [aiResults, setAiResults] = useState<Record<string, { remark?: string; message?: string }>>({});
+  const [aiCopied, setAiCopied] = useState<string | null>(null);
+
+  const copyAI = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setAiCopied(key);
+    setTimeout(() => setAiCopied(null), 2000);
+    toast({ title: "Copied!" });
+  };
+
+  const suggestRemark = async (lead: any) => {
+    setAiLoading("remark-" + lead.id);
+    try {
+      const res = await fetch("/api/ai/suggest-remark", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ leadName: lead.name, service: lead.service, status: lead.status, previousRemark: lead.remarks }),
+      });
+      const data = await res.json();
+      if (data.success) setAiResults(prev => ({ ...prev, [lead.id]: { ...prev[lead.id], remark: data.remark } }));
+      else toast({ title: "AI unavailable", description: data.message, variant: "destructive" });
+    } catch { toast({ title: "Error", description: "AI service unavailable", variant: "destructive" }); }
+    setAiLoading(null);
+  };
+
+  const generateWhatsApp = async (lead: any) => {
+    setAiLoading("wa-" + lead.id);
+    try {
+      const res = await fetch("/api/ai/followup-message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ leadName: lead.name, service: lead.service, status: lead.status, previousRemark: lead.remarks, messageType: "whatsapp" }),
+      });
+      const data = await res.json();
+      if (data.success) setAiResults(prev => ({ ...prev, [lead.id]: { ...prev[lead.id], message: data.message } }));
+      else toast({ title: "AI unavailable", description: data.message, variant: "destructive" });
+    } catch { toast({ title: "Error", description: "AI service unavailable", variant: "destructive" }); }
+    setAiLoading(null);
+  };
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [assignmentFilter, setAssignmentFilter] = useState(user?.role === "TEAM_LEADER" ? "UNASSIGNED" : "ALL");
@@ -437,7 +478,8 @@ export default function LeadsPage() {
               const config = statusConfig[lead.status] || statusConfig.NEW;
               const StatusIcon = config.icon;
               return (
-                <Card key={lead.id} data-testid={`card-lead-${lead.id}`}>
+                <div key={lead.id} className="space-y-0">
+                <Card data-testid={`card-lead-${lead.id}`}>
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -527,6 +569,16 @@ export default function LeadsPage() {
                             Update
                           </Button>
                         )}
+                        {canUpdate(lead) && (
+                          <Button
+                            variant="secondary" size="sm"
+                            onClick={() => setAiOpenLeadId(aiOpenLeadId === lead.id ? null : lead.id)}
+                            className="text-purple-600 border-purple-200 hover:bg-purple-50"
+                            title="AI Tools"
+                          >
+                            <Sparkles className="w-3 h-3" />
+                          </Button>
+                        )}
                         {canDelete && (
                           <Button
                             variant="destructive" size="sm"
@@ -540,6 +592,46 @@ export default function LeadsPage() {
                     </div>
                   </CardContent>
                 </Card>
+                {aiOpenLeadId === lead.id && (
+                  <div className="border border-t-0 border-purple-200 rounded-b-lg bg-purple-50/50 dark:bg-purple-950/20 p-3 space-y-2 mx-0">
+                    <p className="text-xs font-medium text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3" /> AI Tools — {lead.name}
+                    </p>
+                    <div className="flex gap-2 flex-wrap">
+                      <Button size="sm" variant="secondary" className="text-xs h-7"
+                        disabled={aiLoading === "remark-" + lead.id}
+                        onClick={() => suggestRemark(lead)}>
+                        {aiLoading === "remark-" + lead.id ? "Generating..." : "Suggest remark"}
+                      </Button>
+                      <Button size="sm" variant="secondary" className="text-xs h-7"
+                        disabled={aiLoading === "wa-" + lead.id}
+                        onClick={() => generateWhatsApp(lead)}>
+                        {aiLoading === "wa-" + lead.id ? "Generating..." : "WhatsApp message"}
+                      </Button>
+                    </div>
+                    {aiResults[lead.id]?.remark && (
+                      <div className="relative bg-white dark:bg-background rounded-md border p-2">
+                        <p className="text-xs font-medium text-muted-foreground mb-1">Suggested remark:</p>
+                        <p className="text-xs pr-6">{aiResults[lead.id].remark}</p>
+                        <button onClick={() => copyAI(aiResults[lead.id].remark!, "remark-" + lead.id)}
+                          className="absolute top-2 right-2 p-0.5 hover:bg-muted rounded">
+                          {aiCopied === "remark-" + lead.id ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3 text-muted-foreground" />}
+                        </button>
+                      </div>
+                    )}
+                    {aiResults[lead.id]?.message && (
+                      <div className="relative bg-white dark:bg-background rounded-md border p-2">
+                        <p className="text-xs font-medium text-muted-foreground mb-1">WhatsApp message:</p>
+                        <p className="text-xs whitespace-pre-wrap pr-6">{aiResults[lead.id].message}</p>
+                        <button onClick={() => copyAI(aiResults[lead.id].message!, "wa-" + lead.id)}
+                          className="absolute top-2 right-2 p-0.5 hover:bg-muted rounded">
+                          {aiCopied === "wa-" + lead.id ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3 text-muted-foreground" />}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                </div>
               );
             })}
           </div>
