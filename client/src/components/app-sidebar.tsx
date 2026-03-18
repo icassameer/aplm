@@ -15,7 +15,7 @@ import {
 import {
   LayoutDashboard, Users, Building2, Phone,
   BarChart3, FileText, Brain, LogOut, ChevronDown,
-  KeyRound, UserCheck, Download, Briefcase, ArrowUpCircle, Car,
+  KeyRound, UserCheck, Download, Briefcase, ArrowUpCircle, Car, Receipt,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -135,6 +135,8 @@ function getNavItems(role: string) {
     items.push({ title: "AI Proceeding", url: "/meetings", icon: Brain });
     items.push({ title: "Upgrade Requests", url: "/upgrade-requests", icon: ArrowUpCircle });
     items.push({ title: "RC Lookup", url: "/rc-lookup", icon: Car });
+    items.push({ title: "Payment History", url: "/payment-history", icon: Receipt });
+    items.push({ title: "AI Tools", url: "/ai-tools", icon: Brain });
   }
 
   if (role === "AGENCY_ADMIN") {
@@ -148,6 +150,7 @@ function getNavItems(role: string) {
     items.push({ title: "Reports", url: "/reports", icon: Download });
     items.push({ title: "Audit Logs", url: "/audit-logs", icon: FileText });
     items.push({ title: "RC Lookup", url: "/rc-lookup", icon: Car });
+    items.push({ title: "AI Tools", url: "/ai-tools", icon: Brain });
   }
 
   if (role === "TEAM_LEADER") {
@@ -157,11 +160,13 @@ function getNavItems(role: string) {
     items.push({ title: "AI Proceeding", url: "/meetings", icon: Brain });
     items.push({ title: "Audit Logs", url: "/audit-logs", icon: FileText });
     items.push({ title: "RC Lookup", url: "/rc-lookup", icon: Car });
+    items.push({ title: "AI Tools", url: "/ai-tools", icon: Brain });
   }
 
   if (role === "TELE_CALLER") {
     items.push({ title: "Leads", url: "/leads", icon: Phone });
     items.push({ title: "My Performance", url: "/performance", icon: BarChart3 });
+    items.push({ title: "AI Tools", url: "/ai-tools", icon: Brain });
   }
 
   return items;

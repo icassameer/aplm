@@ -27,6 +27,8 @@ import ServicesPage from "@/pages/services";
 import UpgradeRequestsPage from "@/pages/upgrade-requests";
 import RCLookupPage from "@/pages/rc-lookup";
 import PaymentPage from "@/pages/payment";
+import PaymentHistoryPage from "@/pages/payment-history";
+import AIToolsPage from "@/pages/ai-tools";
 
 function ProtectedRoute({ component: Component, allowedRoles }: { component: any; allowedRoles?: string[] }) {
   const { user, isLoading } = useAuth();
@@ -182,7 +184,13 @@ function AuthenticatedLayout() {
                 <ProtectedRoute component={ServicesPage} allowedRoles={["AGENCY_ADMIN"]} />
               </Route>
               <Route path="/upgrade-requests">
-                <ProtectedRoute component={UpgradeRequestsPage} allowedRoles={["MASTER_ADMIN", "AGENCY_ADMIN"]} />
+                 <ProtectedRoute component={UpgradeRequestsPage} allowedRoles={["MASTER_ADMIN", "AGENCY_ADMIN"]} />
+               </Route>
+              <Route path="/payment-history">
+                 <ProtectedRoute component={PaymentHistoryPage} allowedRoles={["MASTER_ADMIN"]} />
+              </Route>
+              <Route path="/ai-tools">
+                 <ProtectedRoute component={AIToolsPage} allowedRoles={["MASTER_ADMIN", "AGENCY_ADMIN", "TEAM_LEADER", "TELE_CALLER"]} />
               </Route>
               <Route path="/reports">
                 <ProtectedRoute component={ReportsPage} allowedRoles={["AGENCY_ADMIN"]} />
