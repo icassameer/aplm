@@ -1,5 +1,5 @@
-import { sendSubscriptionReminderEmail, sendSubscriptionExpiredEmail } from "./email";
 import "dotenv/config";
+import { sendSubscriptionReminderEmail, sendSubscriptionExpiredEmail } from "./email";
 import express, { type Request, Response, NextFunction } from "express";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
