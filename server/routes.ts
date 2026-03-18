@@ -1662,6 +1662,10 @@ Return ONLY valid JSON, no markdown, no explanation.`
   // GET /api/rc-records — get saved RC lookups for this agency
   app.get("/api/rc-records", authMiddleware, roleMiddleware("AGENCY_ADMIN", "TEAM_LEADER"), async (req: AuthRequest, res: Response) => {
     try {
+      const agencyForCheck = await storage.getAgencyByCode(req.user!.agencyCode!);
+      if (!agencyForCheck || agencyForCheck.plan === "BASIC") {
+        return res.status(403).json({ success: false, message: "RC Lookup requires PRO or ENTERPRISE plan" });
+      }
       const agencyCode = req.user!.agencyCode!;
       const records = await storage.getRcRecordsByAgency(agencyCode);
 
