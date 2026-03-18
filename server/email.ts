@@ -291,3 +291,124 @@ export async function sendPaymentSuccessEmail(
     `,
   });
 }
+
+export async function sendSubscriptionReminderEmail(
+  agencyName: string,
+  to: string,
+  fullName: string,
+  plan: string,
+  daysLeft: number,
+  expiresAt: Date
+): Promise<boolean> {
+  try {
+    const expiryStr = expiresAt.toLocaleDateString("en-IN", {
+      day: "numeric", month: "long", year: "numeric",
+    });
+    const urgencyColor = daysLeft <= 1 ? "#dc2626" : "#d97706";
+    const subject =
+      daysLeft <= 1
+        ? `⚠️ Your ICA CRM subscription expires TOMORROW — Renew now`
+        : `⚠️ Your ICA CRM subscription expires in 7 days — Renew now`;
+
+    await resend.emails.send({
+      from: "ICA CRM <support@icaweb.in>",
+      to,
+      subject,
+      html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 0;background:#f8fafc;">
+<tr><td align="center">
+<table width="580" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+<tr><td style="background:#1e3a5f;padding:28px 40px;">
+  <span style="color:#fff;font-size:22px;font-weight:700;">ICA CRM</span>&nbsp;
+  <span style="background:${urgencyColor};color:#fff;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;margin-left:8px;">
+    ${daysLeft <= 1 ? "EXPIRES TOMORROW" : "EXPIRING IN 7 DAYS"}
+  </span>
+</td></tr>
+<tr><td style="padding:36px 40px;">
+  <p style="color:#374151;font-size:15px;margin:0 0 12px;">Dear ${fullName},</p>
+  <p style="color:#374151;font-size:15px;line-height:1.6;">
+    Your <strong>${plan} plan</strong> for <strong>${agencyName}</strong> expires on
+    <strong style="color:${urgencyColor};">${expiryStr}</strong>.
+  </p>
+  <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:18px;margin:24px 0;">
+    <p style="margin:0;color:#92400e;font-size:14px;font-weight:600;">If you don't renew, your team will lose CRM access. Your data stays safe.</p>
+  </div>
+  <table cellpadding="0" cellspacing="0"><tr>
+    <td style="background:#1e3a5f;border-radius:8px;padding:12px 24px;">
+      <a href="https://wa.me/919967969850?text=Hi%2C+I+want+to+renew+ICA+CRM+for+${encodeURIComponent(agencyName)}"
+         style="color:#fff;text-decoration:none;font-size:14px;font-weight:600;">📲 WhatsApp to Renew</a>
+    </td>
+    <td width="12"></td>
+    <td style="border:2px solid #1e3a5f;border-radius:8px;padding:10px 20px;">
+      <a href="mailto:support@icaweb.in"
+         style="color:#1e3a5f;text-decoration:none;font-size:14px;font-weight:600;">✉️ Email Support</a>
+    </td>
+  </tr></table>
+  <p style="color:#9ca3af;font-size:12px;margin-top:28px;border-top:1px solid #e5e7eb;padding-top:16px;">
+    Agency: ${agencyName} | Plan: ${plan} | support@icaweb.in | +91 99679 69850
+  </p>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>`,
+    });
+    return true;
+  } catch (err) {
+    console.error("sendSubscriptionReminderEmail error:", err);
+    return false;
+  }
+}
+
+export async function sendSubscriptionExpiredEmail(
+  agencyName: string,
+  to: string,
+  fullName: string,
+  plan: string
+): Promise<boolean> {
+  try {
+    await resend.emails.send({
+      from: "ICA CRM <support@icaweb.in>",
+      to,
+      subject: `🔴 Your ICA CRM subscription has expired — ${agencyName}`,
+      html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 0;background:#f8fafc;">
+<tr><td align="center">
+<table width="580" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+<tr><td style="background:#7f1d1d;padding:28px 40px;">
+  <span style="color:#fff;font-size:22px;font-weight:700;">ICA CRM</span>&nbsp;
+  <span style="color:#fca5a5;font-size:13px;margin-left:8px;">Subscription Expired</span>
+</td></tr>
+<tr><td style="padding:36px 40px;">
+  <p style="color:#374151;font-size:15px;margin:0 0 12px;">Dear ${fullName},</p>
+  <p style="color:#374151;font-size:15px;line-height:1.6;">
+    Your <strong>${plan} plan</strong> for <strong>${agencyName}</strong> has
+    <strong style="color:#dc2626;">expired</strong>. Your account has been deactivated.
+  </p>
+  <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:18px;margin:24px 0;">
+    <p style="margin:0;color:#991b1b;font-size:14px;">
+      <strong>Your data is safe.</strong> All leads and history are preserved.
+      Renew within 30 days to restore access immediately.
+    </p>
+  </div>
+  <table cellpadding="0" cellspacing="0"><tr>
+    <td style="background:#dc2626;border-radius:8px;padding:12px 24px;">
+      <a href="https://wa.me/919967969850?text=Hi%2C+my+ICA+CRM+expired.+Agency%3A+${encodeURIComponent(agencyName)}"
+         style="color:#fff;text-decoration:none;font-size:14px;font-weight:600;">📲 Renew Now on WhatsApp</a>
+    </td>
+  </tr></table>
+  <p style="color:#9ca3af;font-size:12px;margin-top:28px;border-top:1px solid #e5e7eb;padding-top:16px;">
+    Agency: ${agencyName} | Expired Plan: ${plan} | support@icaweb.in | +91 99679 69850
+  </p>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>`,
+    });
+    return true;
+  } catch (err) {
+    console.error("sendSubscriptionExpiredEmail error:", err);
+    return false;
+  }
+}
