@@ -1716,10 +1716,9 @@ Return ONLY valid JSON, no markdown, no explanation.`
         notes: { agencyCode, packId, packType: pack.type, packSize: String(pack.size) },
       });
 
-      await storage.db.execute(
-        require("drizzle-orm").sql`INSERT INTO addon_purchases (agency_code, pack_type, pack_size, amount, razorpay_order_id, status)
-        VALUES (${agencyCode}, ${pack.type}, ${pack.size}, ${pack.amount}, ${order.id}, 'CREATED')`
-      );
+      const { sql: addonSql } = await import("drizzle-orm");
+      const { db: addonDb } = await import("./db");
+      await addonDb.execute(addonSql`INSERT INTO addon_purchases (agency_code, pack_type, pack_size, amount, razorpay_order_id, status) VALUES (${agencyCode}, ${pack.type}, ${pack.size}, ${pack.amount}, ${order.id}, 'CREATED')`);
 
       res.json({ success: true, data: { orderId: order.id, amount: pack.amount, currency: "INR", keyId: process.env.RAZORPAY_KEY_ID, agencyName: agency.name, packLabel: pack.label } });
     } catch (error: any) {
@@ -1736,18 +1735,17 @@ Return ONLY valid JSON, no markdown, no explanation.`
       const expectedSig = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!).update(body).digest("hex");
       if (expectedSig !== razorpay_signature) return res.status(400).json({ success: false, message: "Invalid signature" });
 
-      const { sql } = require("drizzle-orm");
-      const result = await storage.db.execute(sql`SELECT * FROM addon_purchases WHERE razorpay_order_id = ${razorpay_order_id} LIMIT 1`);
+      const { sql: verifySql } = await import("drizzle-orm");
+      const { db: verifyDb } = await import("./db");
+      const result = await verifyDb.execute(verifySql`SELECT * FROM addon_purchases WHERE razorpay_order_id = ${razorpay_order_id} LIMIT 1`);
       const purchase = result.rows[0] as any;
       if (!purchase) return res.status(404).json({ success: false, message: "Order not found" });
       if (purchase.status === "PAID") return res.json({ success: true, message: "Already processed" });
-
-      await storage.db.execute(sql`UPDATE addon_purchases SET status = 'PAID', razorpay_payment_id = ${razorpay_payment_id} WHERE razorpay_order_id = ${razorpay_order_id}`);
-
+      await verifyDb.execute(verifySql`UPDATE addon_purchases SET status = 'PAID', razorpay_payment_id = ${razorpay_payment_id} WHERE razorpay_order_id = ${razorpay_order_id}`);
       if (purchase.pack_type === "RC") {
-        await storage.db.execute(sql`UPDATE agencies SET rc_addon_credits = rc_addon_credits + ${purchase.pack_size} WHERE agency_code = ${purchase.agency_code}`);
+        await verifyDb.execute(verifySql`UPDATE agencies SET rc_addon_credits = rc_addon_credits + ${purchase.pack_size} WHERE agency_code = ${purchase.agency_code}`);
       } else {
-        await storage.db.execute(sql`UPDATE agencies SET ai_addon_credits = ai_addon_credits + ${purchase.pack_size} WHERE agency_code = ${purchase.agency_code}`);
+        await verifyDb.execute(verifySql`UPDATE agencies SET ai_addon_credits = ai_addon_credits + ${purchase.pack_size} WHERE agency_code = ${purchase.agency_code}`);
       }
 
       await storage.createAuditLog({
