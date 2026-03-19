@@ -232,7 +232,7 @@ export async function sendPaymentLinkEmail(
   to: string, name: string, plan: string, amount: number, paymentUrl: string
 ): Promise<void> {
   await resend.emails.send({
-    from: FROM_EMAIL,
+    from: FROM,
     to,
     subject: `ICA CRM — Complete Your ${plan} Plan Payment`,
     html: `
@@ -262,7 +262,7 @@ export async function sendPaymentSuccessEmail(
   to: string, name: string, plan: string, amount: number, paymentId: string
 ): Promise<void> {
   await resend.emails.send({
-    from: FROM_EMAIL,
+    from: FROM,
     to,
     subject: `ICA CRM — Payment Successful! ${plan} Plan Activated`,
     html: `

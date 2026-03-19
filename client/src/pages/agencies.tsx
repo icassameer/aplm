@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
-import { Building2, Plus, Users, Phone, Crown, Trash2, Settings2 } from "lucide-react";
+import { Building2, Plus, Users, Phone, Crown, Trash2, Settings2, Calendar, CreditCard } from "lucide-react";
 
 export default function AgenciesPage() {
   const [, setLocation] = useLocation();
@@ -23,6 +23,36 @@ export default function AgenciesPage() {
 
   const [open, setOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [activateOpen, setActivateOpen] = useState(false);
+  const [activateAgency, setActivateAgency] = useState<any>(null);
+  const [activateDays, setActivateDays] = useState("30");
+  const [activatePlan, setActivatePlan] = useState("BASIC");
+  const [activateLoading, setActivateLoading] = useState(false);
+
+  const handleActivate = async () => {
+    if (!activateAgency) return;
+    setActivateLoading(true);
+    try {
+      const res = await fetch("/api/subscription/extend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ agencyCode: activateAgency.agencyCode, days: parseInt(activateDays), plan: activatePlan }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({ title: "Subscription activated!", description: `${activateAgency.name} active for ${activateDays} days on ${activatePlan} plan` });
+        setActivateOpen(false);
+        queryClient.invalidateQueries({ queryKey: ["/api/agencies"] });
+      } else {
+        toast({ title: "Error", description: data.message, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to activate", variant: "destructive" });
+    }
+    setActivateLoading(false);
+  };
+
+
   const [editOpen, setEditOpen] = useState(false);
 
   const [selectedAgency, setSelectedAgency] = useState<any>(null);
@@ -254,6 +284,17 @@ export default function AgenciesPage() {
                     <Crown className="w-3 h-3 mr-1" />
                     Add Admin
                   </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-green-600 border-green-300 hover:bg-green-50"
+                    onClick={() => { setActivateAgency(agency); setActivatePlan(agency.plan); setActivateDays("30"); setActivateOpen(true); }}
+                    data-testid={`button-activate-${agency.id}`}
+                  >
+                    <Calendar className="w-3 h-3 mr-1" />
+                    Activate
+                  </Button>
+
 
                   <Button
                     variant="destructive"
@@ -292,6 +333,47 @@ export default function AgenciesPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* ── Activate Subscription Dialog ── */}
+      <Dialog open={activateOpen} onOpenChange={setActivateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Activate Subscription — {activateAgency?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label>Plan</Label>
+              <Select value={activatePlan} onValueChange={setActivatePlan}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="BASIC">BASIC — ₹2,500/mo</SelectItem>
+                  <SelectItem value="PRO">PRO — ₹5,500/mo</SelectItem>
+                  <SelectItem value="ENTERPRISE">ENTERPRISE — ₹12,000/mo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Days to activate</Label>
+              <Select value={activateDays} onValueChange={setActivateDays}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7">7 days (trial)</SelectItem>
+                  <SelectItem value="15">15 days</SelectItem>
+                  <SelectItem value="30">30 days (standard)</SelectItem>
+                  <SelectItem value="60">60 days</SelectItem>
+                  <SelectItem value="90">90 days</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="bg-muted rounded-md p-3 text-sm text-muted-foreground">
+              Agency <strong className="text-foreground">{activateAgency?.name}</strong> will be activated on <strong className="text-foreground">{activatePlan}</strong> plan for <strong className="text-foreground">{activateDays} days</strong>.
+            </div>
+            <Button className="w-full" onClick={handleActivate} disabled={activateLoading}>
+              {activateLoading ? "Activating..." : "✅ Activate Subscription"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Edit Limits Dialog ── */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>

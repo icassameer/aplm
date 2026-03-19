@@ -2236,11 +2236,17 @@ ${crmContext}`,
       await storage.createPayment({ agencyCode, razorpayOrderId: order.id, amount, currency: "INR", plan, status: "CREATED", createdBy: req.user!.id });
       const agencyUsers = await storage.getUsersByAgency(agencyCode);
       const adminUser = agencyUsers.find((u: any) => u.role === "AGENCY_ADMIN");
+      let emailSent = false;
       if (adminUser?.email) {
-        const paymentUrl = `https://crm.icaweb.in/payment?orderId=${order.id}&plan=${plan}&amount=${amount}`;
-        await sendPaymentLinkEmail(adminUser.email, adminUser.fullName, plan, amount / 100, paymentUrl);
+        try {
+          const paymentUrl = `https://crm.icaweb.in/payment?orderId=${order.id}&plan=${plan}&amount=${amount}`;
+          await sendPaymentLinkEmail(adminUser.email, adminUser.fullName, plan, amount / 100, paymentUrl);
+          emailSent = true;
+        } catch (emailErr: any) {
+          console.error("Payment link email failed:", emailErr.message);
+        }
       }
-      res.json({ success: true, message: "Payment link sent to agency admin email" });
+      res.json({ success: true, message: emailSent ? "Payment link sent to agency admin email" : "Order created but email failed — copy this link: https://crm.icaweb.in/payment?orderId=" + order.id + "&plan=" + plan + "&amount=" + amount });
     } catch (error: any) {
       console.error("Send link error:", error);
       res.status(500).json({ success: false, message: "Failed to send payment link" });
