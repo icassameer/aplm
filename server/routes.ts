@@ -1782,7 +1782,8 @@ Return ONLY valid JSON, no markdown, no explanation.`
   app.post("/api/addons/webhook", express.raw({ type: "application/json" }), async (req: Request, res: Response) => {
     try {
       const signature = req.headers["x-razorpay-signature"] as string;
-      const expectedSig = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!).update(req.body).digest("hex");
+      const addonSecret = process.env.ADDON_WEBHOOK_SECRET || process.env.RAZORPAY_KEY_SECRET!;
+      const expectedSig = crypto.createHmac("sha256", addonSecret).update(req.body).digest("hex");
       if (expectedSig !== signature) return res.status(400).json({ success: false });
       const event = JSON.parse(req.body.toString());
       if (event.event === "payment.captured") {
