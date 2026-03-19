@@ -50,12 +50,13 @@ DATABASE_URL=postgresql://postgres:Admin@1234@localhost:5432/ica_crm
 OPENAI_API_KEY=<real key added>
 ANTHROPIC_API_KEY=<real key added — Claude Haiku + Sonnet>
 NODE_ENV=production
-ALLOWED_ORIGINS=https://crm.icaweb.in
+ALLOWED_ORIGINS=https://crm.icaweb.in,https://icaweb.in,https://www.icaweb.in
 RESEND_API_KEY=<active — domain icaweb.in verified>
 FROM_EMAIL=support@icaweb.in
 RC_API_KEY=<pending — Surepass>
 RAZORPAY_KEY_ID=<live key>
 RAZORPAY_KEY_SECRET=<live secret>
+ADDON_WEBHOOK_SECRET=<addon webhook secret from Razorpay>
 ```
 
 ---
@@ -82,7 +83,7 @@ RAZORPAY_KEY_SECRET=<live secret>
 | Role | Access |
 |------|--------|
 | MASTER_ADMIN | Full system — all agencies, users, plans, upgrade approvals, subscription management, payment history |
-| AGENCY_ADMIN | Own agency — leads, users, AI Proceeding, RC lookup, reports, plan upgrades, AI Tools (PRO+) |
+| AGENCY_ADMIN | Own agency — leads, users, AI Proceeding, RC lookup, reports, plan upgrades, AI Tools (PRO+), addon credits |
 | TEAM_LEADER | Add leads, bulk upload, assign leads to telecallers, view team performance, AI Tools (PRO+) |
 | TELE_CALLER | Own assigned leads only — update status, remarks, WhatsApp, inline AI buttons (PRO+) |
 
@@ -105,7 +106,16 @@ RAZORPAY_KEY_SECRET=<live secret>
 | Automated Emails | ✅ | ✅ | ✅ |
 | Subscription | 30 days/payment | 30 days/payment | 30 days/payment |
 
-> Add-on packs (Coming Soon): 10 RC ₹99 | 25 RC ₹199 | 5 AI ₹199 | 15 AI ₹499
+### Add-on Packs (Live on icaweb.in)
+
+| Pack | Credits | Price | Per Unit |
+|------|---------|-------|----------|
+| RC Small | 10 RC Lookups | ₹99 | ₹9.90/lookup |
+| RC Large | 25 RC Lookups | ₹199 | ₹7.96/lookup |
+| AI Small | 5 AI Proceedings | ₹199 | ₹39.80/session |
+| AI Large | 15 AI Proceedings | ₹499 | ₹33.27/session |
+
+> Add-on packs available for PRO and ENTERPRISE plans only · Credits added instantly after payment
 
 ---
 
@@ -135,29 +145,20 @@ RAZORPAY_KEY_SECRET=<live secret>
 | Razorpay webhook auto-activate | ✅ | Payment → expiry +30 days |
 | Manual extend (MASTER_ADMIN) | ✅ | POST /api/subscription/extend |
 | Subscription emails | ✅ | Confirmation, reminder, expired |
-| Daily subscription cron | ✅ | setInterval in server/index.ts — fires on startup + every 24h |
-| Payment History page | ✅ | MASTER_ADMIN — all Razorpay transactions with status |
-| AI Smart Remark Suggestions | ✅ | Claude Haiku — PRO + ENTERPRISE — AI Tools page + inline on leads |
-| AI Follow-up Message Generator | ✅ | Claude Haiku — WhatsApp + Call script — AI Tools page + inline on leads |
-| AI Lead Scoring | ✅ | Claude Haiku — 1-100 score + Hot/Warm/Cold label — AI Tools page |
-| AI CRM Chatbot | ✅ | Claude Sonnet — live CRM context — ENTERPRISE only |
-| AI Tools page | ✅ | Dedicated page — all roles — /ai-tools |
-| Inline AI buttons on lead cards | ✅ | ✨ sparkle button — suggest remark + WhatsApp message — TELE_CALLER + TEAM_LEADER |
+| Daily subscription cron | ✅ | setInterval in server/index.ts |
+| Payment History page | ✅ | MASTER_ADMIN — all Razorpay transactions |
+| AI Smart Remark Suggestions | ✅ | Claude Haiku — PRO + ENTERPRISE |
+| AI Follow-up Message Generator | ✅ | Claude Haiku — WhatsApp + Call script |
+| AI Lead Scoring | ✅ | Claude Haiku — 1-100 score + Hot/Warm/Cold |
+| AI CRM Chatbot | ✅ | Claude Sonnet — ENTERPRISE only |
+| AI Tools page | ✅ | /ai-tools — all roles |
+| Inline AI buttons on lead cards | ✅ | ✨ sparkle button — TELE_CALLER + TEAM_LEADER |
+| Add-on packs checkout | ✅ | RC + AI top-ups on icaweb.in with Razorpay |
+| Add-on credit balance in CRM | ✅ | Plan & Upgrade page — RC + AI credits with Buy more link |
 
 ---
 
 ## 🤖 AI Suite — Feature Details
-
-### Overview
-- **AI Tools page** (`/ai-tools`) — standalone page with all 4 AI tools
-- **Inline AI on lead cards** — ✨ sparkle button on every assigned lead card
-
-### Inline AI on Lead Cards
-Telecallers see a purple ✨ button next to Update on each assigned lead. Clicking opens an AI panel below the card:
-- **Suggest remark** — professional call remark based on lead name, service, outcome
-- **WhatsApp message** — ready-to-send Hinglish/English message
-- Both have a **copy button** — one click to clipboard, paste directly into WhatsApp
-- Panel toggles open/close on sparkle button click
 
 ### API Endpoints
 ```
@@ -167,26 +168,58 @@ POST /api/ai/score-lead         → Lead conversion score 1-100 (Haiku)
 POST /api/ai/chat               → CRM AI assistant with live data (Sonnet)
 ```
 
-### Plan Gating
-| Feature | BASIC | PRO | ENTERPRISE |
-|---------|:-----:|:---:|:----------:|
-| Smart Remarks | ❌ | ✅ | ✅ |
-| Follow-up Generator | ❌ | ✅ | ✅ |
-| Lead Scoring | ❌ | ✅ | ✅ |
-| Inline AI on leads | ❌ | ✅ | ✅ |
-| AI Chatbot | ❌ | ❌ | ✅ |
-
 ### Models Used
 - **Claude Haiku** (`claude-haiku-4-5-20251001`) — Remarks, Follow-up, Scoring (~₹0.001/call)
 - **Claude Sonnet** (`claude-sonnet-4-6`) — Chatbot (~₹0.05/message)
 
-### Troubleshooting AI Features
+---
+
+## 🎁 Add-on Packs System
+
+### How It Works
+```
+Agency hits RC/AI monthly limit
+        ↓
+Goes to icaweb.in → Add-on Packs section
+        ↓
+Selects pack → enters agency code → verifies → pays via Razorpay
+        ↓
+Webhook fires → credits added to agencies table instantly
+        ↓
+CRM Plan & Upgrade page shows updated balance
+```
+
+### DB Schema
+```sql
+-- New columns on agencies table
+rc_addon_credits  integer  DEFAULT 0
+ai_addon_credits  integer  DEFAULT 0
+
+-- New table
+addon_purchases (id, agency_code, pack_type, pack_size, amount, razorpay_order_id, razorpay_payment_id, status, created_at)
+```
+
+### API Endpoints
+```
+POST /api/addons/create-order   → Create Razorpay order for addon pack
+POST /api/addons/verify         → Verify payment + credit agency
+GET  /api/addons/balance        → Get current addon credits (public — uses agency code)
+POST /api/addons/webhook        → Razorpay webhook auto-credit
+```
+
+### Razorpay Webhooks Registered
+| URL | Purpose |
+|-----|---------|
+| /api/payments/webhook | Legacy payment verify |
+| /api/subscription/webhook | Subscription auto-activate |
+| /api/addons/webhook | Add-on pack credit on payment |
+
+### Troubleshooting Add-on Packs
 | Problem | Solution |
 |---------|---------|
-| AI returns 403 | Agency is on BASIC plan — upgrade required |
-| AI chatbot 403 | ENTERPRISE plan required |
-| AI service error 500 | Check ANTHROPIC_API_KEY in .env → `pm2 restart all --update-env` |
-| Sparkle button not showing | Lead must be assigned to that telecaller + hard refresh (Ctrl+Shift+R) |
+| "Could not verify" on icaweb.in | Check ALLOWED_ORIGINS includes https://icaweb.in in .env |
+| "Failed to create order" | Check pm2 logs — usually db import issue |
+| Credits not added after payment | Check ADDON_WEBHOOK_SECRET in .env matches Razorpay |
 
 ---
 
@@ -199,11 +232,11 @@ Razorpay fires → /api/subscription/webhook
         ↓
 Verify signature → find agency → set expiry = today + 30 days
         ↓
-Day 23 → 7-day reminder email  (cron: daysLeft === 7)
-Day 29 → 1-day urgent reminder  (cron: daysLeft === 1)
+Day 23 → 7-day reminder email
+Day 29 → 1-day urgent reminder
 Day 30 → expired → banner in CRM → Renew button
         ↓
-cron: daysLeft ≤ 0 → SET subscription_status='EXPIRED', is_active=false → send expired email
+cron: daysLeft ≤ 0 → SET subscription_status='EXPIRED' → send expired email
         ↓
 Customer pays → webhook fires → expiry + 30 more days
 ```
@@ -215,23 +248,15 @@ POST /api/subscription/extend    → MASTER_ADMIN manual extend
 POST /api/subscription/webhook   → Razorpay auto-activate
 ```
 
-### Razorpay Webhooks Registered
-| URL | Purpose |
-|-----|---------|
-| /api/payments/webhook | Legacy payment verify |
-| /api/subscription/webhook | Subscription auto-activate |
-
 ---
 
-## ⏱️ Daily Cron — Implementation Details
+## ⏱️ Daily Cron
 
-The cron lives in `server/index.ts` inside the `(async () => { ... })()` bootstrap block.
-
-- `import "dotenv/config"` MUST be the first import in `server/index.ts`
-- PM2 cluster safe — idempotent checks before updating
+- Lives in `server/index.ts`
+- `import "dotenv/config"` MUST be first import
+- PM2 cluster safe — idempotent
 - Fires 10 seconds after startup, then every 24 hours
 
-**To verify cron is running:**
 ```bash
 pm2 logs ica-crm --lines 10
 # Look for: [cron] Subscription cron done — X agencies checked
@@ -239,8 +264,7 @@ pm2 logs ica-crm --lines 10
 
 **To set subscription expiry for a new agency:**
 ```sql
-UPDATE agencies
-SET subscription_status = 'ACTIVE',
+UPDATE agencies SET subscription_status = 'ACTIVE',
     subscription_expiry = NOW() + INTERVAL '30 days'
 WHERE agency_code = 'ICA-XXXXXX';
 ```
@@ -283,12 +307,20 @@ psql -U postgres -h localhost -d ica_crm
 psql -U postgres -h localhost -d ica_crm -c \
   "SELECT name, plan, subscription_status, subscription_expiry FROM agencies;"
 
+# Check addon credits
+psql -U postgres -h localhost -d ica_crm -c \
+  "SELECT name, agency_code, rc_addon_credits, ai_addon_credits FROM agencies;"
+
 # Git tags / milestones
 git tag -a vX.X -m "Description"
 git push origin vX.X
 
 # Rollback to a tag
 git checkout vX.X
+npm run build && pm2 restart all --update-env
+
+# Return to latest
+git checkout master
 npm run build && pm2 restart all --update-env
 ```
 
@@ -309,14 +341,13 @@ npm run build && pm2 restart all --update-env
 | Leads page (inline AI) | client/src/pages/leads.tsx |
 | AI Tools page | client/src/pages/ai-tools.tsx |
 | Payment History page | client/src/pages/payment-history.tsx |
+| Plan & Upgrade page | client/src/pages/upgrade-requests.tsx |
 | Subscription banner | client/src/components/SubscriptionBanner.tsx |
 | Sidebar nav | client/src/components/app-sidebar.tsx |
 | Nginx (CRM) | /etc/nginx/sites-enabled/ica-crm |
 | Nginx (website) | /etc/nginx/sites-enabled/icaweb-in |
 | Marketing website | /var/www/icaweb-in/index.html |
 | Privacy policy | /var/www/icaweb-in/privacy-policy.html |
-| Razorpay key (website) | search `rzp_live_` in /var/www/icaweb-in/index.html |
-| Razorpay key (CRM) | search `rzp_live_` in client/src/pages/upgrade-requests.tsx |
 
 ---
 
@@ -326,31 +357,37 @@ npm run build && pm2 restart all --update-env
 |---------|---------|
 | Site not loading | `pm2 restart all --update-env` |
 | 502 Bad Gateway | `curl http://localhost:5000/api/auth/me` — if fails run `npm run build && pm2 restart all --update-env` |
-| Build failed (JSX error) | `npm run build 2>&1 \| grep ERROR` — fix file then rebuild |
-| Subscription not activating | Check RAZORPAY_KEY_SECRET in .env matches Razorpay webhook secret |
-| Emails not sending | Check RESEND_API_KEY in .env; use `pm2 restart all --update-env` |
-| Cron error: f is not a function | dotenv import must be FIRST line in server/index.ts |
-| App not picking up .env changes | Always use `pm2 restart all --update-env` |
-| SSL expired | `certbot renew && systemctl reload nginx` |
+| Build failed | `npm run build 2>&1 \| grep ERROR` — fix file then rebuild |
+| Subscription not activating | Check RAZORPAY_KEY_SECRET in .env matches webhook secret |
+| Emails not sending | Check RESEND_API_KEY in .env |
 | AI returns 403 | Agency on BASIC plan — PRO or ENTERPRISE required |
 | AI chatbot 403 | ENTERPRISE plan required |
 | AI service error 500 | Check ANTHROPIC_API_KEY in .env → restart |
 | Sparkle button not showing | Lead must be assigned to telecaller + hard refresh (Ctrl+Shift+R) |
+| Addon verify fails on icaweb.in | Check ALLOWED_ORIGINS includes https://icaweb.in |
+| Addon credits not added | Check ADDON_WEBHOOK_SECRET in .env matches Razorpay |
+| SSL expired | `certbot renew && systemctl reload nginx` |
 
 ---
 
 ## 🏷️ Git Tags / Milestones
 
-| Tag | Description |
-|-----|-------------|
-| `v8.1` | Inline AI buttons on lead cards — ✨ sparkle button with remark + WhatsApp generator |
-| `v8.0` | AI Suite launch — Smart Remarks, Follow-up Generator, Lead Scoring, CRM Chatbot, Payment History |
-| `v7.0` | Daily subscription cron, expiry emails |
-| `v6.0` | Subscription system, Razorpay webhook, renewal banner |
+| Tag | Date | Description |
+|-----|------|-------------|
+| `v8.3` | Mar 19, 2026 | Add-on packs complete — icaweb.in checkout + CRM balance display |
+| `v8.2` | Mar 19, 2026 | Add-on packs backend + icaweb.in section live |
+| `v8.1` | Mar 18, 2026 | Inline AI buttons on lead cards |
+| `v8.0` | Mar 18, 2026 | AI Suite launch — 4 features + Payment History |
+| `v7.0` | Mar 18, 2026 | Daily subscription cron |
+| `v6.0` | Mar 17, 2026 | Subscription system + Razorpay webhook |
 
 **To rollback to any milestone:**
 ```bash
-git checkout v8.1
+git checkout v8.3   # or any tag
+npm run build && pm2 restart all --update-env
+
+# Return to latest
+git checkout master
 npm run build && pm2 restart all --update-env
 ```
 
@@ -362,7 +399,6 @@ npm run build && pm2 restart all --update-env
 |------|----------|
 | RC API key (Surepass) — ₹25k deposit | 🔴 High |
 | Onboard APLM + ICA with real users | 🔴 High |
-| Add-on packs checkout (RC + AI credits) | 🟡 Medium |
 | Auto-reply support@icaweb.in | 🟡 Medium |
 
 ---
@@ -371,10 +407,12 @@ npm run build && pm2 restart all --update-env
 
 | Version | Date | Changes |
 |---------|------|---------|
-| v8.1 | Mar 18, 2026 | Inline AI buttons on lead cards — ✨ sparkle button for TELE_CALLER + TEAM_LEADER. Suggest remark + WhatsApp message generator directly on each lead card with copy-to-clipboard. |
-| v8.0 | Mar 18, 2026 | AI Suite — Smart Remark Suggestions, Follow-up Message Generator, Lead Scoring (Claude Haiku), CRM AI Chatbot (Claude Sonnet). Payment History page. Git milestone tagging. ANTHROPIC_API_KEY added. |
-| v7.0 | Mar 18, 2026 | Daily subscription cron live — 7-day/1-day reminders + auto-expire; fixed dotenv import order |
-| v6.0 | Mar 17, 2026 | Subscription expiry system, 30-day billing, Razorpay webhook auto-activate, renewal banner |
+| v8.3 | Mar 19, 2026 | Add-on credit balance on Plan & Upgrade page — RC + AI credits with Buy more link to icaweb.in |
+| v8.2 | Mar 19, 2026 | Add-on packs backend (create-order, verify, balance, webhook) + icaweb.in checkout section live |
+| v8.1 | Mar 18, 2026 | Inline AI buttons on lead cards — ✨ sparkle button with remark + WhatsApp generator |
+| v8.0 | Mar 18, 2026 | AI Suite — Smart Remarks, Follow-up Generator, Lead Scoring (Haiku), CRM Chatbot (Sonnet). Payment History page. Git milestones. |
+| v7.0 | Mar 18, 2026 | Daily subscription cron — 7-day/1-day reminders + auto-expire |
+| v6.0 | Mar 17, 2026 | Subscription expiry system, 30-day billing, Razorpay webhook, renewal banner |
 | v5.0 | Mar 2026 | Marketing website, Razorpay live payments, privacy policy, edit agency limits |
 | v4.0 | Mar 2026 | Resend email integration, plan upgrade email, VS Code SSH |
 | v3.0 | Mar 2026 | RC Lookup UI, plan limits, WhatsApp, VPS deployment, SSL |
@@ -383,4 +421,4 @@ npm run build && pm2 restart all --update-env
 
 ---
 
-*Last updated: March 18, 2026 | v8.1 | Sameer | ICA — Innovation, Consulting & Automation*
+*Last updated: March 19, 2026 | v8.3 | Sameer | ICA — Innovation, Consulting & Automation*
