@@ -1688,6 +1688,128 @@ Return ONLY valid JSON, no markdown, no explanation.`
       res.status(500).json({ success: false, message: "Internal server error" });
     }
   });
+
+  // ── Add-on Packs ──────────────────────────────────────────────────────────────
+
+  const ADDON_PACKS: Record<string, { type: string; size: number; amount: number; label: string }> = {
+    "rc_10":  { type: "RC",  size: 10,  amount: 9900,  label: "10 RC Lookups" },
+    "rc_25":  { type: "RC",  size: 25,  amount: 19900, label: "25 RC Lookups" },
+    "ai_5":   { type: "AI",  size: 5,   amount: 19900, label: "5 AI Proceedings" },
+    "ai_15":  { type: "AI",  size: 15,  amount: 49900, label: "15 AI Proceedings" },
+  };
+
+  // POST /api/addons/create-order
+  app.post("/api/addons/create-order", async (req: Request, res: Response) => {
+    try {
+      const { packId, agencyCode } = req.body;
+      if (!packId || !agencyCode) return res.status(400).json({ success: false, message: "packId and agencyCode required" });
+      const pack = ADDON_PACKS[packId];
+      if (!pack) return res.status(400).json({ success: false, message: "Invalid pack" });
+      const agency = await storage.getAgencyByCode(agencyCode);
+      if (!agency) return res.status(404).json({ success: false, message: "Agency not found" });
+      if (!agency.isActive) return res.status(403).json({ success: false, message: "Agency is inactive" });
+
+      const order = await razorpay.orders.create({
+        amount: pack.amount,
+        currency: "INR",
+        receipt: `addon_${agencyCode}_${Date.now()}`,
+        notes: { agencyCode, packId, packType: pack.type, packSize: String(pack.size) },
+      });
+
+      await storage.db.execute(
+        require("drizzle-orm").sql`INSERT INTO addon_purchases (agency_code, pack_type, pack_size, amount, razorpay_order_id, status)
+        VALUES (${agencyCode}, ${pack.type}, ${pack.size}, ${pack.amount}, ${order.id}, 'CREATED')`
+      );
+
+      res.json({ success: true, data: { orderId: order.id, amount: pack.amount, currency: "INR", keyId: process.env.RAZORPAY_KEY_ID, agencyName: agency.name, packLabel: pack.label } });
+    } catch (error: any) {
+      console.error("Addon order error:", error);
+      res.status(500).json({ success: false, message: "Failed to create order" });
+    }
+  });
+
+  // POST /api/addons/verify
+  app.post("/api/addons/verify", async (req: Request, res: Response) => {
+    try {
+      const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+      const body = razorpay_order_id + "|" + razorpay_payment_id;
+      const expectedSig = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!).update(body).digest("hex");
+      if (expectedSig !== razorpay_signature) return res.status(400).json({ success: false, message: "Invalid signature" });
+
+      const { sql } = require("drizzle-orm");
+      const result = await storage.db.execute(sql`SELECT * FROM addon_purchases WHERE razorpay_order_id = ${razorpay_order_id} LIMIT 1`);
+      const purchase = result.rows[0] as any;
+      if (!purchase) return res.status(404).json({ success: false, message: "Order not found" });
+      if (purchase.status === "PAID") return res.json({ success: true, message: "Already processed" });
+
+      await storage.db.execute(sql`UPDATE addon_purchases SET status = 'PAID', razorpay_payment_id = ${razorpay_payment_id} WHERE razorpay_order_id = ${razorpay_order_id}`);
+
+      if (purchase.pack_type === "RC") {
+        await storage.db.execute(sql`UPDATE agencies SET rc_addon_credits = rc_addon_credits + ${purchase.pack_size} WHERE agency_code = ${purchase.agency_code}`);
+      } else {
+        await storage.db.execute(sql`UPDATE agencies SET ai_addon_credits = ai_addon_credits + ${purchase.pack_size} WHERE agency_code = ${purchase.agency_code}`);
+      }
+
+      await storage.createAuditLog({
+        agencyCode: purchase.agency_code, leadId: null, userId: "addon-payment",
+        action: `ADDON_PURCHASED: ${purchase.pack_size} ${purchase.pack_type} credits`,
+        oldStatus: null, newStatus: null,
+        remarks: `Payment ID: ${razorpay_payment_id} | Amount: ₹${purchase.amount / 100}`,
+        targetUserId: null,
+      });
+
+      res.json({ success: true, message: `${purchase.pack_size} ${purchase.pack_type} credits added` });
+    } catch (error: any) {
+      console.error("Addon verify error:", error);
+      res.status(500).json({ success: false, message: "Verification failed" });
+    }
+  });
+
+  // GET /api/addons/balance?agencyCode=xxx
+  app.get("/api/addons/balance", async (req: Request, res: Response) => {
+    try {
+      const { agencyCode } = req.query;
+      if (!agencyCode) return res.status(400).json({ success: false, message: "agencyCode required" });
+      const agency = await storage.getAgencyByCode(agencyCode as string);
+      if (!agency) return res.status(404).json({ success: false, message: "Agency not found" });
+      res.json({ success: true, data: { rcAddonCredits: (agency as any).rcAddonCredits || 0, aiAddonCredits: (agency as any).aiAddonCredits || 0 } });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  });
+
+  // POST /api/addons/webhook — Razorpay auto-credit on payment
+  app.post("/api/addons/webhook", express.raw({ type: "application/json" }), async (req: Request, res: Response) => {
+    try {
+      const signature = req.headers["x-razorpay-signature"] as string;
+      const expectedSig = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!).update(req.body).digest("hex");
+      if (expectedSig !== signature) return res.status(400).json({ success: false });
+      const event = JSON.parse(req.body.toString());
+      if (event.event === "payment.captured") {
+        const payment = event.payload.payment.entity;
+        const notes = payment.notes || {};
+        if (notes.packId) {
+          const { sql } = require("drizzle-orm");
+          const result = await storage.db.execute(sql`SELECT * FROM addon_purchases WHERE razorpay_order_id = ${payment.order_id} LIMIT 1`);
+          const purchase = result.rows[0] as any;
+          if (purchase && purchase.status !== "PAID") {
+            await storage.db.execute(sql`UPDATE addon_purchases SET status = 'PAID', razorpay_payment_id = ${payment.id} WHERE razorpay_order_id = ${payment.order_id}`);
+            if (purchase.pack_type === "RC") {
+              await storage.db.execute(sql`UPDATE agencies SET rc_addon_credits = rc_addon_credits + ${purchase.pack_size} WHERE agency_code = ${purchase.agency_code}`);
+            } else {
+              await storage.db.execute(sql`UPDATE agencies SET ai_addon_credits = ai_addon_credits + ${purchase.pack_size} WHERE agency_code = ${purchase.agency_code}`);
+            }
+            console.log(`[Addon Webhook] ${purchase.pack_size} ${purchase.pack_type} credits added to ${purchase.agency_code}`);
+          }
+        }
+      }
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Addon webhook error:", error);
+      res.status(200).json({ success: true });
+    }
+  });
+
   // ── AI Features ────────────────────────────────────────────────────────────────
 
 
