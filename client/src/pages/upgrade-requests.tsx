@@ -170,6 +170,19 @@ export default function UpgradeRequestsPage() {
   const currentPlan = agency?.plan || "BASIC";
   const availableUpgrades = planOrder.filter(p => planOrder.indexOf(p) > planOrder.indexOf(currentPlan));
 
+  const { data: addonBalance } = useQuery({
+    queryKey: ["/api/addons/balance", agency?.agencyCode],
+    queryFn: async () => {
+      if (!agency?.agencyCode) return null;
+      const res = await fetch(`/api/addons/balance?agencyCode=${agency.agencyCode}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      return data.success ? data.data : null;
+    },
+    enabled: !!agency?.agencyCode && !isMaster,
+  });
+
   if (isLoading) {
     return (
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -193,7 +206,7 @@ export default function UpgradeRequestsPage() {
       </div>
 
       {!isMaster && agency && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           <Card>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground">Current Plan</p>
@@ -212,6 +225,22 @@ export default function UpgradeRequestsPage() {
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground">User Limit</p>
               <p className="text-2xl font-bold mt-1" data-testid="text-user-limit">{agency.userLimit}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-blue-200 dark:border-blue-800">
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">RC Add-on Credits</p>
+              <p className="text-2xl font-bold mt-1 text-blue-600">{addonBalance?.rcAddonCredits ?? 0}</p>
+              <a href="https://icaweb.in/#addons" target="_blank" rel="noopener noreferrer"
+                className="text-xs text-blue-500 hover:underline mt-1 block">+ Buy more</a>
+            </CardContent>
+          </Card>
+          <Card className="border-purple-200 dark:border-purple-800">
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">AI Add-on Credits</p>
+              <p className="text-2xl font-bold mt-1 text-purple-600">{addonBalance?.aiAddonCredits ?? 0}</p>
+              <a href="https://icaweb.in/#addons" target="_blank" rel="noopener noreferrer"
+                className="text-xs text-purple-500 hover:underline mt-1 block">+ Buy more</a>
             </CardContent>
           </Card>
         </div>
