@@ -258,7 +258,20 @@ export default function LeadsPage() {
     );
   };
 
+
   const leadList = leadsData?.leads || [];
+
+  const allOnPageSelected = leadList.length > 0 && leadList.every((l: any) => selectedLeadIds.includes(l.id));
+  const someOnPageSelected = leadList.some((l: any) => selectedLeadIds.includes(l.id)) && !allOnPageSelected;
+
+  const toggleSelectAllOnPage = () => {
+    const pageIds = leadList.map((l: any) => l.id);
+    if (allOnPageSelected) {
+      setSelectedLeadIds(prev => prev.filter(id => !pageIds.includes(id)));
+    } else {
+      setSelectedLeadIds(prev => [...new Set([...prev, ...pageIds])]);
+    }
+  };
   const total = isAgencyAdmin
     ? Object.values(leadStatsData || {}).reduce((sum: number, v: any) => sum + (typeof v === "number" ? v : 0), 0)
     : leadsData?.total || 0;
@@ -473,6 +486,31 @@ export default function LeadsPage() {
         </div>
       ) : (
         <>
+          {/* Select all on current page — only shown to TEAM_LEADER when leads exist */}
+          {canAssign && leadList.length > 0 && (
+            <div className="flex items-center gap-3 px-4 py-2 bg-muted/40 rounded-lg border border-dashed">
+              <Checkbox
+                checked={allOnPageSelected}
+                data-state={someOnPageSelected ? "indeterminate" : allOnPageSelected ? "checked" : "unchecked"}
+                onCheckedChange={toggleSelectAllOnPage}
+                data-testid="checkbox-select-all-page"
+                className="shrink-0"
+              />
+              <span className="text-sm text-muted-foreground">
+                {allOnPageSelected
+                  ? `All ${leadList.length} leads on this page selected`
+                  : someOnPageSelected
+                  ? `${selectedLeadIds.filter(id => leadList.some((l: any) => l.id === id)).length} of ${leadList.length} selected on this page`
+                  : `Select all ${leadList.length} leads on this page`}
+              </span>
+              {selectedLeadIds.length > 0 && (
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {selectedLeadIds.length} total selected
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="grid gap-3">
             {leadList.map((lead: any) => {
               const config = statusConfig[lead.status] || statusConfig.NEW;
