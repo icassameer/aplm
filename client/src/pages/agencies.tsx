@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
-import { Building2, Plus, Users, Phone, Crown, Trash2, Settings2, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import { Building2, Plus, Users, Phone, Crown, Trash2, Settings2, Calendar, ChevronLeft, ChevronRight, Mail } from "lucide-react";
 
 const LIMIT = 20;
 
@@ -25,6 +25,8 @@ export default function AgenciesPage() {
   const queryClient = useQueryClient();
 
   const [page, setPage] = useState(1);
+  const [prospectOpen, setProspectOpen] = useState(false);
+  const [prospectForm, setProspectForm] = useState({ name: "", email: "" });
   const [open, setOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [activateOpen, setActivateOpen] = useState(false);
@@ -60,6 +62,19 @@ export default function AgenciesPage() {
     }
     setActivateLoading(false);
   };
+
+  const prospectMutation = useMutation({
+    mutationFn: () => apiFetch("/api/email/prospect", {
+      method: "POST",
+      body: JSON.stringify({ to: prospectForm.email, name: prospectForm.name }),
+    }),
+    onSuccess: () => {
+      setProspectOpen(false);
+      setProspectForm({ name: "", email: "" });
+      toast({ title: "Prospect email sent!", description: `Email sent to ${prospectForm.name}` });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
 
   const { data: agencyData, isLoading } = useQuery({
     queryKey: ["/api/agencies", page],
@@ -174,13 +189,18 @@ export default function AgenciesPage() {
             Manage all registered agencies — {total} total
           </p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-create-agency">
-              <Plus className="w-4 h-4 mr-2" />
-              Create Agency
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setProspectOpen(true)} data-testid="button-send-prospect">
+            <Mail className="w-4 h-4 mr-2" />
+            Send Prospect Email
+          </Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-create-agency">
+                <Plus className="w-4 h-4 mr-2" />
+                Create Agency
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>Create New Agency</DialogTitle></DialogHeader>
             <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }} className="space-y-4">
@@ -214,7 +234,8 @@ export default function AgenciesPage() {
               </Button>
             </form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       {/* Agency list */}
@@ -298,6 +319,50 @@ export default function AgenciesPage() {
           </Button>
         </div>
       )}
+
+      {/* ── Send Prospect Email Dialog ── */}
+      <Dialog open={prospectOpen} onOpenChange={setProspectOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Prospect Inquiry Email</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Sends a branded ICA CRM email with all 3 plan details + add-on packs to a prospective agency client.
+          </p>
+          <form onSubmit={(e) => { e.preventDefault(); prospectMutation.mutate(); }} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Prospect Name</Label>
+              <Input
+                placeholder="e.g. Rahul Shah"
+                value={prospectForm.name}
+                onChange={(e) => setProspectForm({ ...prospectForm, name: e.target.value })}
+                required
+                data-testid="input-prospect-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Prospect Email</Label>
+              <Input
+                type="email"
+                placeholder="e.g. rahul@agencyname.com"
+                value={prospectForm.email}
+                onChange={(e) => setProspectForm({ ...prospectForm, email: e.target.value })}
+                required
+                data-testid="input-prospect-email"
+              />
+            </div>
+            <div className="bg-muted/40 rounded-md p-3 text-xs text-muted-foreground">
+              📧 This will send a complete plan comparison email (BASIC / PRO / ENTERPRISE) with pricing and add-on packs to the prospect.
+            </div>
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setProspectOpen(false)}>Cancel</Button>
+              <Button type="submit" className="flex-1" disabled={prospectMutation.isPending} data-testid="button-submit-prospect">
+                {prospectMutation.isPending ? "Sending..." : "Send Email"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Activate Subscription Dialog ── */}
       <Dialog open={activateOpen} onOpenChange={setActivateOpen}>
