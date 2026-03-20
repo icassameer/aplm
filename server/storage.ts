@@ -181,13 +181,11 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(agencies).orderBy(desc(agencies.createdAt));
   }
 
-  // Update by ID (used for isActive toggle, leadLimit, userLimit)
   async updateAgency(id: string, data: Partial<Agency>): Promise<Agency | undefined> {
     const [updated] = await db.update(agencies).set(data).where(eq(agencies.id, id)).returning();
     return updated;
   }
 
-  // Update by agencyCode (used for subscription activation from webhook)
   async updateAgencyByCode(agencyCode: string, data: Partial<Agency>): Promise<Agency | undefined> {
     const [updated] = await db.update(agencies).set(data).where(eq(agencies.agencyCode, agencyCode)).returning();
     return updated;
@@ -207,9 +205,6 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  // ── Subscription queries ────────────────────────────────────────────────────
-
-  // Get agencies where subscription has expired (for daily cron)
   async getExpiredAgencies(now: Date): Promise<Agency[]> {
     return db.select().from(agencies).where(
       and(
@@ -219,7 +214,6 @@ export class DatabaseStorage implements IStorage {
     );
   }
 
-  // Get agencies expiring before targetDate but after now (for reminder emails)
   async getAgenciesExpiringBefore(targetDate: Date, now: Date): Promise<Agency[]> {
     return db.select().from(agencies).where(
       and(
@@ -347,35 +341,135 @@ export class DatabaseStorage implements IStorage {
     return result?.count ?? 0;
   }
 
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // PERFORMANCE STATS v2 — Smart 5-metric formula
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   async getPerformanceStats(agencyCode: string, userId?: string): Promise<any> {
+    const now = new Date();
+
+    // ── 1. Lead counts by status ────────────────────────────────────────────
     const conditions = [eq(leads.agencyCode, agencyCode)];
     if (userId) conditions.push(eq(leads.assignedTo, userId));
     const where = and(...conditions);
 
     const [stats] = await db.select({
-      totalLeads: count(),
-      converted: sql<number>`count(CASE WHEN ${leads.status} = 'CONVERTED' THEN 1 END)`.mapWith(Number),
-      followUps: sql<number>`count(CASE WHEN ${leads.status} = 'FOLLOW_UP' THEN 1 END)`.mapWith(Number),
+      totalLeads:       count(),
+      newLeads:         sql<number>`count(CASE WHEN ${leads.status} = 'NEW'            THEN 1 END)`.mapWith(Number),
+      converted:        sql<number>`count(CASE WHEN ${leads.status} = 'CONVERTED'      THEN 1 END)`.mapWith(Number),
+      notInterested:    sql<number>`count(CASE WHEN ${leads.status} = 'NOT_INTERESTED' THEN 1 END)`.mapWith(Number),
+      followUps:        sql<number>`count(CASE WHEN ${leads.status} = 'FOLLOW_UP'      THEN 1 END)`.mapWith(Number),
       overdueFollowUps: sql<number>`count(CASE WHEN ${leads.status} = 'FOLLOW_UP' AND ${leads.followUpDate} < NOW() THEN 1 END)`.mapWith(Number),
     }).from(leads).where(where);
 
-    const total = stats.totalLeads || 1;
-    const conversionRate = (stats.converted / total) * 100;
-    const followUpDiscipline = stats.followUps > 0 ? ((stats.followUps - stats.overdueFollowUps) / stats.followUps) * 100 : 100;
-    const activityConsistency = Math.min(100, (total / 10) * 100);
-    const overduePenalty = stats.overdueFollowUps > 0 ? Math.min(100, (stats.overdueFollowUps / total) * 100) : 0;
-    const score = (conversionRate * 0.4) + (followUpDiscipline * 0.3) + (activityConsistency * 0.2) - (overduePenalty * 0.1);
+    const total            = stats.totalLeads      ?? 0;
+    const newLeads         = stats.newLeads         ?? 0;
+    const converted        = stats.converted        ?? 0;
+    const notInterested    = stats.notInterested    ?? 0;
+    const followUps        = stats.followUps        ?? 0;
+    const overdueFollowUps = stats.overdueFollowUps ?? 0;
 
+    // ── 2. Speed to contact ─────────────────────────────────────────────────
+    // Use updatedAt - createdAt for all non-NEW leads (no extra columns needed)
+    // Cap at 72h per lead so outliers don't destroy the average
+    const workedConditions = [
+      eq(leads.agencyCode, agencyCode),
+      sql`${leads.status} != 'NEW'`,
+    ];
+    if (userId) workedConditions.push(eq(leads.assignedTo, userId));
+
+    const workedLeads = await db.select({
+      createdAt: leads.createdAt,
+      updatedAt: leads.updatedAt,
+    }).from(leads).where(and(...workedConditions));
+
+    let avgContactHours = 72; // worst-case default (no worked leads)
+    if (workedLeads.length > 0) {
+      const hours = workedLeads.map(l => {
+        const diffMs = (l.updatedAt?.getTime() ?? now.getTime()) - (l.createdAt?.getTime() ?? now.getTime());
+        return Math.min(Math.max(0, diffMs / 3_600_000), 72);
+      });
+      avgContactHours = hours.reduce((a, b) => a + b, 0) / hours.length;
+    }
+
+    // ── 3. Five metrics (each 0–100) ────────────────────────────────────────
+
+    // A) CONVERSION QUALITY — 35%
+    // Only count leads actively in play (exclude untouched NEW + closed NOT_INTERESTED)
+    // Rationale: NOT_INTERESTED is correct professional behaviour — not a failure
+    const inPlay = total - newLeads - notInterested;
+    const conversionQuality = inPlay > 0
+      ? Math.min(100, (converted / inPlay) * 100)
+      : 0;
+
+    // B) SPEED TO CONTACT — 25%
+    // 0h  → 100 pts  |  24h → 67 pts  |  48h → 33 pts  |  72h+ → 0 pts
+    const speedScore = Math.max(0, 100 - (avgContactHours / 72) * 100);
+
+    // C) FOLLOW-UP DISCIPLINE — 20%
+    // % of follow-up leads that are NOT overdue
+    // No follow-ups at all → neutral 50 (absence of data ≠ failure)
+    const onTime = followUps - overdueFollowUps;
+    const followUpDiscipline = followUps > 0
+      ? (onTime / followUps) * 100
+      : 50;
+
+    // D) LEAD COVERAGE — 15%
+    // % of assigned leads moved out of NEW status
+    // Rewards telecallers who touch every lead, not just cherry-pick
+    const leadCoverage = total > 0
+      ? ((total - newLeads) / total) * 100
+      : 0;
+
+    // E) CLOSURE DECISIVENESS — 5%
+    // Decisively closing dead leads (NOT_INTERESTED) is professional
+    // 30%+ closure rate of worked leads → 100 pts
+    const worked = total - newLeads;
+    const closureScore = worked > 0
+      ? Math.min(100, (notInterested / worked) * 333)
+      : 0;
+
+    // ── 4. Weighted score ───────────────────────────────────────────────────
+    const rawScore =
+      (conversionQuality  * 0.35) +
+      (speedScore         * 0.25) +
+      (followUpDiscipline * 0.20) +
+      (leadCoverage       * 0.15) +
+      (closureScore       * 0.05);
+
+    // ── 5. Confidence damping for new telecallers ───────────────────────────
+    // < 5 leads = statistically unreliable → blend toward neutral baseline (40)
+    // 0 leads → score=40  |  3 leads → 60% real + 40% neutral  |  5+ leads → full score
+    const confidence  = Math.min(1, total / 5);
+    const NEUTRAL     = 40;
+    const dampedScore = rawScore * confidence + NEUTRAL * (1 - confidence);
+
+    const finalScore = Math.round(Math.max(0, Math.min(100, dampedScore)) * 100) / 100;
+
+    // ── 6. Return — backward-compatible + extended ──────────────────────────
     return {
-      totalLeads: total,
-      converted: stats.converted,
-      followUps: stats.followUps,
-      overdueFollowUps: stats.overdueFollowUps,
-      conversionRate: Math.round(conversionRate * 100) / 100,
-      followUpDiscipline: Math.round(followUpDiscipline * 100) / 100,
-      activityConsistency: Math.round(activityConsistency * 100) / 100,
-      overduePenalty: Math.round(overduePenalty * 100) / 100,
-      score: Math.round(Math.max(0, Math.min(100, score)) * 100) / 100,
+      // Legacy keys — used by dashboard.tsx & performance.tsx (do NOT rename)
+      totalLeads:          total,
+      converted,
+      followUps,
+      overdueFollowUps,
+      conversionRate:      Math.round(conversionQuality  * 100) / 100,  // ← mapped from conversionQuality
+      followUpDiscipline:  Math.round(followUpDiscipline * 100) / 100,
+      activityConsistency: Math.round(leadCoverage       * 100) / 100,  // ← mapped from leadCoverage
+      overduePenalty:      followUps > 0
+                             ? Math.round((overdueFollowUps / followUps) * 100 * 100) / 100
+                             : 0,
+      score: finalScore,
+
+      // New extended keys — for future Performance page upgrades
+      newLeads,
+      notInterested,
+      inPlay,
+      conversionQuality:   Math.round(conversionQuality  * 100) / 100,
+      speedScore:          Math.round(speedScore          * 100) / 100,
+      avgContactHours:     Math.round(avgContactHours     * 10)  / 10,
+      leadCoverage:        Math.round(leadCoverage        * 100) / 100,
+      closureScore:        Math.round(closureScore        * 100) / 100,
+      confidence:          Math.round(confidence          * 100) / 100,
     };
   }
 
@@ -430,11 +524,11 @@ export class DatabaseStorage implements IStorage {
       if (overdueResult.count > 0) {
         notifications.push({ type: "OVERDUE_FOLLOWUPS", count: overdueResult.count, message: `You have ${overdueResult.count} overdue follow-up${overdueResult.count > 1 ? "s" : ""}`, severity: "warning" });
       }
-      const [newLeads] = await db.select({ count: count() }).from(leads).where(
+      const [newLeadsResult] = await db.select({ count: count() }).from(leads).where(
         and(eq(leads.assignedTo, userId), eq(leads.status, "NEW"))
       );
-      if (newLeads.count > 0) {
-        notifications.push({ type: "NEW_LEADS", count: newLeads.count, message: `${newLeads.count} new lead${newLeads.count > 1 ? "s" : ""} assigned to you`, severity: "info" });
+      if (newLeadsResult.count > 0) {
+        notifications.push({ type: "NEW_LEADS", count: newLeadsResult.count, message: `${newLeadsResult.count} new lead${newLeadsResult.count > 1 ? "s" : ""} assigned to you`, severity: "info" });
       }
     }
 
@@ -505,14 +599,11 @@ export class DatabaseStorage implements IStorage {
     return record;
   }
 
-  // ── Payment functions ───────────────────────────────────────────────────────
-
   async createPayment(data: InsertPayment): Promise<Payment> {
     const [record] = await db.insert(payments).values(data).returning();
     return record;
   }
 
-  // Alias used by webhook
   async createPaymentRecord(data: InsertPayment): Promise<Payment> {
     return this.createPayment(data);
   }
@@ -534,8 +625,6 @@ export class DatabaseStorage implements IStorage {
   async getAllPayments(): Promise<Payment[]> {
     return db.select().from(payments).orderBy(desc(payments.createdAt));
   }
-
-  // ── Processing jobs ─────────────────────────────────────────────────────────
 
   async createJob(id: string, message: string): Promise<void> {
     await db.insert(processingJobs).values({ id, status: "processing", progress: 5, message });

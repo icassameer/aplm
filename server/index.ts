@@ -249,10 +249,17 @@ app.use((req, res, next) => {
   }
 
   // 10s startup delay (lets DB + routes settle), then every 24h
-  setTimeout(() => {
-    runSubscriptionCron();
-    setInterval(runSubscriptionCron, 24 * 60 * 60 * 1000);
-  }, 10_000);
+  // PM2 cluster-safe: only instance 0 runs the cron — prevents duplicate emails
+  const isPrimaryInstance = process.env.NODE_APP_INSTANCE === "0" || process.env.NODE_APP_INSTANCE === undefined;
+  if (isPrimaryInstance) {
+    setTimeout(() => {
+      runSubscriptionCron();
+      setInterval(runSubscriptionCron, 24 * 60 * 60 * 1000);
+    }, 10_000);
+    log("Subscription cron registered on primary instance", "cron");
+  } else {
+    log(`Cron skipped on instance ${process.env.NODE_APP_INSTANCE}`, "cron");
+  }
   // ─────────────────────────────────────────────────────────────────────────────
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);
