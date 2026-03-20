@@ -243,6 +243,20 @@ app.use((req, res, next) => {
       }
 
       log(`Subscription cron done — ${agencyRows.length} agencies checked`, "cron");
+
+      // ── Clean up old processing jobs (older than 7 days) ──────────────────
+      try {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const cleaned = await db.execute(sql`
+          DELETE FROM processing_jobs
+          WHERE updated_at < ${sevenDaysAgo.toISOString()}
+          AND status IN ('completed', 'failed')
+        `);
+        log(`Job cleanup done — old completed/failed jobs removed`, "cron");
+      } catch (cleanErr) {
+        log(`Job cleanup error: ${cleanErr}`, "cron");
+      }
+
     } catch (err) {
       log(`Subscription cron error: ${err}`, "cron");
     }

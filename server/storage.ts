@@ -32,6 +32,7 @@ export interface IStorage {
   getAgency(id: string): Promise<Agency | undefined>;
   getAgencyByCode(code: string): Promise<Agency | undefined>;
   getAllAgencies(): Promise<Agency[]>;
+  getAgenciesPaginated(page: number, limit: number): Promise<{ agencies: Agency[]; total: number }>;
   updateAgency(id: string, data: Partial<Agency>): Promise<Agency | undefined>;
   updateAgencyByCode(agencyCode: string, data: Partial<Agency>): Promise<Agency | undefined>;
   deleteAgency(id: string): Promise<void>;
@@ -81,6 +82,7 @@ export interface IStorage {
   getPaymentsByAgency(agencyCode: string): Promise<Payment[]>;
   updatePayment(orderId: string, data: Partial<Payment>): Promise<Payment | undefined>;
   getAllPayments(): Promise<Payment[]>;
+  getPaymentsPaginated(page: number, limit: number): Promise<{ payments: Payment[]; total: number }>;
   createPaymentRecord(data: InsertPayment): Promise<Payment>;
 
   createJob(id: string, message: string): Promise<void>;
@@ -179,6 +181,13 @@ export class DatabaseStorage implements IStorage {
 
   async getAllAgencies(): Promise<Agency[]> {
     return db.select().from(agencies).orderBy(desc(agencies.createdAt));
+  }
+
+  async getAgenciesPaginated(page: number = 1, limit: number = 20): Promise<{ agencies: Agency[]; total: number }> {
+    const offset = (page - 1) * limit;
+    const [totalResult] = await db.select({ count: count() }).from(agencies);
+    const result = await db.select().from(agencies).orderBy(desc(agencies.createdAt)).limit(limit).offset(offset);
+    return { agencies: result, total: totalResult.count };
   }
 
   async updateAgency(id: string, data: Partial<Agency>): Promise<Agency | undefined> {
@@ -624,6 +633,13 @@ export class DatabaseStorage implements IStorage {
 
   async getAllPayments(): Promise<Payment[]> {
     return db.select().from(payments).orderBy(desc(payments.createdAt));
+  }
+
+  async getPaymentsPaginated(page: number = 1, limit: number = 20): Promise<{ payments: Payment[]; total: number }> {
+    const offset = (page - 1) * limit;
+    const [totalResult] = await db.select({ count: count() }).from(payments);
+    const result = await db.select().from(payments).orderBy(desc(payments.createdAt)).limit(limit).offset(offset);
+    return { payments: result, total: totalResult.count };
   }
 
   async createJob(id: string, message: string): Promise<void> {

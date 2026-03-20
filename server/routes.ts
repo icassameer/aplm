@@ -357,8 +357,15 @@ export async function registerRoutes(
 
   app.get("/api/agencies", authMiddleware, roleMiddleware("MASTER_ADMIN"), async (req: AuthRequest, res: Response) => {
     try {
-      const allAgencies = await storage.getAllAgencies();
-      res.json({ success: true, data: allAgencies });
+      const page  = parseInt(req.query.page  as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      // If ?all=true requested (e.g. dashboard needs full list for counts), return unpaginated
+      if (req.query.all === "true") {
+        const allAgencies = await storage.getAllAgencies();
+        return res.json({ success: true, data: allAgencies });
+      }
+      const result = await storage.getAgenciesPaginated(page, limit);
+      res.json({ success: true, data: result.agencies, total: result.total, page, limit });
     } catch (error: any) {
       console.error(error);
       res.status(500).json({ success: false, message: "Internal server error" });
@@ -2257,12 +2264,14 @@ ${crmContext}`,
   app.get("/api/payments", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       if (req.user!.role === "MASTER_ADMIN") {
-        const all = await storage.getAllPayments();
+        const page  = parseInt(req.query.page  as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 20;
+        const result = await storage.getPaymentsPaginated(page, limit);
         const allAgencies = await storage.getAllAgencies();
         const agencyMap: Record<string, string> = {};
         for (const a of allAgencies) { agencyMap[a.agencyCode] = a.name; }
-        const enriched = all.map((p: any) => ({ ...p, agencyName: agencyMap[p.agencyCode] || p.agencyCode }));
-        return res.json({ success: true, data: enriched });
+        const enriched = result.payments.map((p: any) => ({ ...p, agencyName: agencyMap[p.agencyCode] || p.agencyCode }));
+        return res.json({ success: true, data: enriched, total: result.total, page, limit });
       }
       const records = await storage.getPaymentsByAgency(req.user!.agencyCode!);
       res.json({ success: true, data: records });
