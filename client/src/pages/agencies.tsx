@@ -18,6 +18,7 @@ import { Building2, Plus, Users, Phone, Crown, Trash2, Settings2, Calendar, Cred
 export default function AgenciesPage() {
   const [, setLocation] = useLocation();
   const { apiFetch } = useApi();
+  const { token } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
