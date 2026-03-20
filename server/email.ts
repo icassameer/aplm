@@ -84,14 +84,72 @@ const planColors: Record<string, string> = {
 const planPrices: Record<string, string> = {
   BASIC: "₹2,500/month",
   PRO: "₹5,500/month",
-  ENTERPRISE: "₹15,000/month",
+  ENTERPRISE: "₹12,000/month",
 };
 
 const planFeatures: Record<string, string[]> = {
-  BASIC: ["500 leads", "5 users", "WhatsApp integration", "Basic reports", "Email support"],
-  PRO: ["1,000 leads", "10 users", "AI Meeting Analysis — 10/month", "RC Vehicle Lookup — 100/month", "Advanced reports", "Email + Chat support"],
-  ENTERPRISE: ["Unlimited leads & users", "Unlimited AI Meeting Analysis", "Unlimited RC Lookup", "Full analytics dashboard", "Dedicated Account Manager", "Priority support (Email + Chat + Phone)"],
+  BASIC: [
+    "Lead management (limit set by admin)",
+    "User accounts (limit set by admin)",
+    "WhatsApp click-to-chat",
+    "Automated emails",
+    "Basic performance reports",
+    "Email support",
+  ],
+  PRO: [
+    "Lead management (limit set by admin)",
+    "User accounts (limit set by admin)",
+    "AI Proceeding (meeting transcription) — 15/month",
+    "RC Vehicle Lookup — 50/month",
+    "AI Smart Remarks + Follow-up Generator + Lead Scoring",
+    "Inline AI on lead cards",
+    "WhatsApp + Automated emails",
+    "Advanced reports",
+    "Email + Chat support",
+  ],
+  ENTERPRISE: [
+    "Lead management (limit set by admin)",
+    "User accounts (limit set by admin)",
+    "AI Proceeding (meeting transcription) — 40/month",
+    "RC Vehicle Lookup — 200/month",
+    "Full AI Suite — Remarks, Follow-up, Scoring, Chatbot",
+    "Inline AI on lead cards",
+    "CRM AI Chatbot (ENTERPRISE exclusive)",
+    "WhatsApp + Automated emails",
+    "Full analytics dashboard",
+    "Dedicated Account Manager",
+    "Priority support — Email + Chat + Phone",
+  ],
 };
+
+
+const addonInfo = `
+<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:16px 20px;margin-top:16px;">
+  <p style="margin:0 0 8px;color:#0369a1;font-weight:bold;font-size:14px;">Add-on Packs (Top-up anytime)</p>
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td style="padding:4px 8px 4px 0;font-size:13px;color:#334155;">RC Small</td>
+      <td style="padding:4px 0;font-size:13px;color:#334155;">10 RC Lookups</td>
+      <td style="padding:4px 0;font-size:13px;font-weight:bold;color:#0369a1;">Rs.99</td>
+    </tr>
+    <tr>
+      <td style="padding:4px 8px 4px 0;font-size:13px;color:#334155;">RC Large</td>
+      <td style="padding:4px 0;font-size:13px;color:#334155;">25 RC Lookups</td>
+      <td style="padding:4px 0;font-size:13px;font-weight:bold;color:#0369a1;">Rs.199</td>
+    </tr>
+    <tr>
+      <td style="padding:4px 8px 4px 0;font-size:13px;color:#334155;">AI Small</td>
+      <td style="padding:4px 0;font-size:13px;color:#334155;">5 AI Proceedings</td>
+      <td style="padding:4px 0;font-size:13px;font-weight:bold;color:#0369a1;">Rs.199</td>
+    </tr>
+    <tr>
+      <td style="padding:4px 8px 4px 0;font-size:13px;color:#334155;">AI Large</td>
+      <td style="padding:4px 0;font-size:13px;color:#334155;">15 AI Proceedings</td>
+      <td style="padding:4px 0;font-size:13px;font-weight:bold;color:#0369a1;">Rs.499</td>
+    </tr>
+  </table>
+  <p style="margin:8px 0 0;color:#64748b;font-size:12px;">Purchase add-ons anytime at <a href="https://icaweb.in" style="color:#0369a1;">icaweb.in</a></p>
+</div>`;
 
 // ── 1. Welcome Email ─────────────────────────────────────────────────────────
 export async function sendWelcomeEmail(
@@ -132,7 +190,9 @@ export async function sendWelcomeEmail(
       </p>
     </div>
 
-    <p style="color:#566573;margin:0;">Need help? Reply to this email or call <strong>+91 99679 69850</strong></p>
+    \${addonInfo}
+
+    <p style="color:#566573;margin:24px 0 0;">Need help? Reply to this email or call <strong>+91 99679 69850</strong></p>
     <p style="color:#566573;margin:8px 0 0;">Best regards,<br><strong>Sameer | ICA Team</strong></p>
   `;
 
@@ -156,6 +216,10 @@ export async function sendProspectEmail(to: string, name: string): Promise<boole
         </ul>
       </div>
     </div>`).join("")}
+
+    \${addonInfo}
+
+    ${addonInfo}
 
     <div style="background:#eaf4fb;border-radius:6px;padding:16px 20px;margin:24px 0;text-align:center;">
       <p style="margin:0 0 8px;color:#1a5276;font-weight:bold;">Ready to get started?</p>
