@@ -1833,6 +1833,11 @@ app.post("/api/ai/suggest-remark", authMiddleware, roleMiddleware("TELE_CALLER",
     const { leadName, phone, service, status, previousRemark } = req.body;
     if (!leadName || !status) return res.status(400).json({ success: false, message: "Lead name and status required" });
 
+    const businessContext = [
+      agency.businessProfile ? `Agency profile: ${agency.businessProfile}` : "",
+      agency.businessServices ? `Services offered: ${agency.businessServices}` : "",
+    ].filter(Boolean).join("\n");
+
     const message = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 200,
@@ -1840,13 +1845,13 @@ app.post("/api/ai/suggest-remark", authMiddleware, roleMiddleware("TELE_CALLER",
         role: "user",
         content: `You are a CRM assistant for an Indian insurance/financial services agency. Write a short, professional call remark in English (2-3 sentences max) for a telecaller to log after a call.
 
-Lead details:
+${businessContext ? `Agency context:\n${businessContext}\n` : ""}Lead details:
 - Name: ${leadName}
 - Service interested in: ${service || "General inquiry"}
 - Call outcome: ${status}
 - Previous remark: ${previousRemark || "None"}
 
-Write only the remark text, nothing else. Keep it factual, professional, and specific to the outcome. Use Indian business context.`
+Write only the remark text, nothing else. Keep it factual, professional, and specific to the outcome. Use Indian business context relevant to the agency's focus area.`
       }]
     });
 
@@ -1872,6 +1877,11 @@ app.post("/api/ai/followup-message", authMiddleware, roleMiddleware("TELE_CALLER
     const { leadName, service, status, previousRemark, messageType } = req.body;
     if (!leadName) return res.status(400).json({ success: false, message: "Lead name required" });
 
+    const businessContext2 = [
+      agency.businessProfile ? `Agency profile: ${agency.businessProfile}` : "",
+      agency.businessServices ? `Services offered: ${agency.businessServices}` : "",
+    ].filter(Boolean).join("\n");
+
     const message = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 300,
@@ -1879,7 +1889,7 @@ app.post("/api/ai/followup-message", authMiddleware, roleMiddleware("TELE_CALLER
         role: "user",
         content: `You are a CRM assistant for an Indian insurance/financial services agency. Write a ${messageType === "whatsapp" ? "WhatsApp message" : "call script"} in Hinglish or English (as appropriate for Indian clients).
 
-Lead details:
+${businessContext2 ? `Agency context:\n${businessContext2}\n` : ""}Lead details:
 - Name: ${leadName}
 - Service: ${service || "financial services"}
 - Current status: ${status || "NEW"}
@@ -1890,6 +1900,7 @@ Rules:
 - Call script: natural opening, mention service, ask open question
 - Use "Namaste" or "Hello" as greeting
 - Never be pushy
+- Personalise message based on the agency's actual services and profile
 - Write only the message/script, nothing else`
       }]
     });
@@ -1915,6 +1926,11 @@ app.post("/api/ai/score-lead", authMiddleware, roleMiddleware("TELE_CALLER", "TE
 
     const { leadName, service, status, followUpDate, remarks, source } = req.body;
 
+    const businessContext3 = [
+      agency.businessProfile ? `Agency profile: ${agency.businessProfile}` : "",
+      agency.businessServices ? `Agency specialises in: ${agency.businessServices}` : "",
+    ].filter(Boolean).join("\n");
+
     const message = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 150,
@@ -1922,7 +1938,7 @@ app.post("/api/ai/score-lead", authMiddleware, roleMiddleware("TELE_CALLER", "TE
         role: "user",
         content: `You are a lead scoring AI for an Indian insurance/financial services CRM. Score this lead from 1-100 for conversion likelihood and give a one-line reason.
 
-Lead:
+${businessContext3 ? `Agency context:\n${businessContext3}\n` : ""}Lead:
 - Name: ${leadName}
 - Service: ${service || "unknown"}
 - Status: ${status}
@@ -1937,6 +1953,7 @@ Scoring guide:
 - NEW from referral = 50-60
 - NEW from cold call = 20-35
 - NOT_INTERESTED = 5-15
+- Boost score if the lead's service matches the agency's core specialisation
 
 Return ONLY valid JSON: {"score": number, "reason": "one line reason", "label": "Hot|Warm|Cold"}`
       }]
@@ -1978,12 +1995,19 @@ app.post("/api/ai/chat", authMiddleware, roleMiddleware("AGENCY_ADMIN", "MASTER_
 - Conversion rate: ${total > 0 ? ((stats.CONVERTED / total) * 100).toFixed(1) : 0}%`;
     }
 
+    // Inject business profile into chatbot system context
+    const agency2 = agencyCode ? await storage.getAgencyByCode(agencyCode) : null;
+    const businessContext4 = agency2 ? [
+      agency2.businessProfile ? `Agency profile: ${agency2.businessProfile}` : "",
+      agency2.businessServices ? `Services offered: ${agency2.businessServices}` : "",
+    ].filter(Boolean).join("\n") : "";
+
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 500,
       system: `You are an intelligent CRM assistant for ICA CRM, an insurance agency management platform. You help agency admins understand their lead data, team performance, and suggest actionable improvements. Be concise, specific, and use Indian business context. Always give practical advice.
 
-${crmContext}`,
+${businessContext4 ? `About this agency:\n${businessContext4}\n` : ""}${crmContext}`,
       messages: [{
         role: "user",
         content: question
@@ -1997,6 +2021,36 @@ ${crmContext}`,
     res.status(500).json({ success: false, message: "AI service error" });
   }
 });
+  // ── Agency Business Profile API ───────────────────────────────────────────
+
+  // GET /api/agency/profile — AGENCY_ADMIN gets own profile
+  app.get("/api/agency/profile", authMiddleware, roleMiddleware("AGENCY_ADMIN", "TEAM_LEADER", "TELE_CALLER"), async (req: AuthRequest, res: Response) => {
+    try {
+      const agencyCode = req.user!.agencyCode;
+      if (!agencyCode) return res.status(400).json({ success: false, message: "No agency" });
+      const agency = await storage.getAgencyByCode(agencyCode);
+      if (!agency) return res.status(404).json({ success: false, message: "Agency not found" });
+      res.json({ success: true, data: { businessProfile: agency.businessProfile, businessServices: agency.businessServices, name: agency.name } });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // PATCH /api/agency/profile — AGENCY_ADMIN updates own profile
+  app.patch("/api/agency/profile", authMiddleware, roleMiddleware("AGENCY_ADMIN"), async (req: AuthRequest, res: Response) => {
+    try {
+      const agencyCode = req.user!.agencyCode;
+      if (!agencyCode) return res.status(400).json({ success: false, message: "No agency" });
+      const { businessProfile, businessServices } = req.body;
+      const agency = await storage.getAgencyByCode(agencyCode);
+      if (!agency) return res.status(404).json({ success: false, message: "Agency not found" });
+      await storage.updateAgency(agency.id, { businessProfile, businessServices });
+      res.json({ success: true, message: "Business profile updated" });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
   // ── Email API Endpoints ────────────────────────────────────────────────────
 
   // Send prospect inquiry email

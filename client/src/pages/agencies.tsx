@@ -10,10 +10,11 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
-import { Building2, Plus, Users, Phone, Crown, Trash2, Settings2, Calendar, ChevronLeft, ChevronRight, Mail } from "lucide-react";
+import { Building2, Plus, Users, Phone, Crown, Trash2, Settings2, Calendar, ChevronLeft, ChevronRight, Mail, FileText } from "lucide-react";
 
 const LIMIT = 20;
 
@@ -35,6 +36,8 @@ export default function AgenciesPage() {
   const [activatePlan, setActivatePlan] = useState("BASIC");
   const [activateLoading, setActivateLoading] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({ businessProfile: "", businessServices: "" });
   const [selectedAgency, setSelectedAgency] = useState<any>(null);
   const [editForm, setEditForm] = useState({ leadLimit: "", userLimit: "", plan: "" });
   const [form, setForm] = useState({ name: "", plan: "BASIC", leadLimit: "500", userLimit: "10" });
@@ -132,6 +135,23 @@ export default function AgenciesPage() {
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
+  const editProfileMutation = useMutation({
+    mutationFn: () =>
+      apiFetch(`/api/agencies/${selectedAgency?.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          businessProfile: profileForm.businessProfile,
+          businessServices: profileForm.businessServices,
+        }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/agencies"] });
+      setProfileOpen(false);
+      toast({ title: "Business profile saved", description: "AI tools will now use this context" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
   const deleteAgencyMutation = useMutation({
     mutationFn: (id: string) => apiFetch(`/api/agencies/${id}`, { method: "DELETE" }),
     onSuccess: () => {
@@ -162,6 +182,15 @@ export default function AgenciesPage() {
     setSelectedAgency(agency);
     setEditForm({ leadLimit: String(agency.leadLimit), userLimit: String(agency.userLimit), plan: agency.plan });
     setEditOpen(true);
+  };
+
+  const openProfileDialog = (agency: any) => {
+    setSelectedAgency(agency);
+    setProfileForm({
+      businessProfile: agency.businessProfile || "",
+      businessServices: agency.businessServices || "",
+    });
+    setProfileOpen(true);
   };
 
   const planColors: Record<string, string> = {
@@ -263,6 +292,12 @@ export default function AgenciesPage() {
                         <Users className="w-3 h-3" />
                         <strong className="text-foreground">{agency.userLimit}</strong>&nbsp;users max
                       </span>
+                      {agency.businessServices && (
+                        <span className="flex items-center gap-1 text-blue-600">
+                          <FileText className="w-3 h-3" />
+                          {agency.businessServices.length > 40 ? agency.businessServices.slice(0, 40) + "…" : agency.businessServices}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -270,6 +305,10 @@ export default function AgenciesPage() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <Button variant="outline" size="sm" onClick={() => openEditDialog(agency)} data-testid={`button-edit-limits-${agency.id}`}>
                     <Settings2 className="w-3 h-3 mr-1" />Edit Limits
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => openProfileDialog(agency)} data-testid={`button-edit-profile-${agency.id}`}
+                    className={agency.businessProfile ? "text-blue-600 border-blue-300 hover:bg-blue-50" : "text-muted-foreground"}>
+                    <FileText className="w-3 h-3 mr-1" />{agency.businessProfile ? "Edit Profile" : "Add Profile"}
                   </Button>
                   <Button variant="secondary" size="sm" onClick={() => { setSelectedAgency(agency); setAdminOpen(true); }} data-testid={`button-add-admin-${agency.id}`}>
                     <Crown className="w-3 h-3 mr-1" />Add Admin
@@ -438,6 +477,50 @@ export default function AgenciesPage() {
               <Button type="button" variant="outline" className="flex-1" onClick={() => setEditOpen(false)}>Cancel</Button>
               <Button type="submit" className="flex-1" disabled={editLimitsMutation.isPending} data-testid="button-save-limits">
                 {editLimitsMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Business Profile Dialog ── */}
+      <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Business Profile — {selectedAgency?.name}</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            This information is used by AI tools (Smart Remarks, Follow-up Generator, Lead Scoring, Chatbot) to personalise responses for this agency.
+          </p>
+          <form onSubmit={(e) => { e.preventDefault(); editProfileMutation.mutate(); }} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Company Profile</Label>
+              <Textarea
+                placeholder="e.g. We are a Pune-based insurance agency serving individual customers and SMEs. Our team focuses on building long-term relationships through personalised service."
+                value={profileForm.businessProfile}
+                onChange={(e) => setProfileForm({ ...profileForm, businessProfile: e.target.value })}
+                rows={4}
+                data-testid="input-business-profile"
+              />
+              <p className="text-xs text-muted-foreground">Describe the agency — location, target customers, specialisation, team style</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Products / Services Sold</Label>
+              <Input
+                placeholder="e.g. Motor Insurance, Health Insurance, Term Life, Personal Accident"
+                value={profileForm.businessServices}
+                onChange={(e) => setProfileForm({ ...profileForm, businessServices: e.target.value })}
+                data-testid="input-business-services"
+              />
+              <p className="text-xs text-muted-foreground">Comma-separated list of insurance products this agency sells</p>
+            </div>
+            <div className="bg-blue-50 dark:bg-blue-950/30 rounded-md p-3 text-xs text-blue-700 dark:text-blue-300">
+              🤖 AI tools will use this profile to write more relevant remarks, follow-up messages, and lead scores specific to this agency's business.
+            </div>
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setProfileOpen(false)}>Cancel</Button>
+              <Button type="submit" className="flex-1" disabled={editProfileMutation.isPending} data-testid="button-save-profile">
+                {editProfileMutation.isPending ? "Saving..." : "Save Profile"}
               </Button>
             </div>
           </form>

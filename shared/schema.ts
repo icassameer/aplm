@@ -25,6 +25,9 @@ export const agencies = pgTable("agencies", {
   lastPaymentId: text("last_payment_id"),
   lastPaymentAt: timestamp("last_payment_at"),
   lastPaymentAmount: integer("last_payment_amount"),
+  // ── Business Profile ───────────────────────────────────────────
+  businessProfile: text("business_profile"),   // Company description, target customers, focus area
+  businessServices: text("business_services"), // Products/services sold e.g. "Motor, Health, Term Life"
   // ──────────────────────────────────────────────────────────────
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
