@@ -163,6 +163,7 @@ ADDON_WEBHOOK_SECRET=<addon webhook secret from Razorpay>
 | Select all on page (leads) | ✅ | Team Leader bulk assign — current page checkbox |
 | Send Prospect Email UI | ✅ | MASTER_ADMIN → Agencies → Send Prospect Email |
 | Email templates audit | ✅ | Correct pricing, features, add-ons in all emails |
+| Agency Business Profile | ✅ | Company profile + services stored per agency — injected into all 4 AI tools |
 
 ---
 
@@ -209,10 +210,12 @@ Agency pays on icaweb.in → webhook → +30 days auto
 
 ### API Endpoints
 ```
-POST /api/ai/suggest-remark     → Smart remark (Haiku)
-POST /api/ai/followup-message   → WhatsApp / call script (Haiku)
-POST /api/ai/score-lead         → Lead score 1-100 (Haiku)
-POST /api/ai/chat               → CRM assistant with live data (Sonnet)
+POST /api/ai/suggest-remark     → Smart remark (Haiku) — uses agency business profile
+POST /api/ai/followup-message   → WhatsApp / call script (Haiku) — uses agency business profile
+POST /api/ai/score-lead         → Lead score 1-100 (Haiku) — weights by agency focus area
+POST /api/ai/chat               → CRM assistant with live data (Sonnet) — knows agency business
+GET  /api/agency/profile        → Get own agency business profile (AGENCY_ADMIN)
+PATCH /api/agency/profile       → Update own agency business profile (AGENCY_ADMIN)
 ```
 
 ### Plan Gating
@@ -223,6 +226,35 @@ POST /api/ai/chat               → CRM assistant with live data (Sonnet)
 | Lead Scoring | ❌ | ✅ | ✅ |
 | Inline AI on leads | ❌ | ✅ | ✅ |
 | AI Chatbot | ❌ | ❌ | ✅ |
+
+---
+
+## 🏢 Agency Business Profile
+
+Each agency can store a **business profile** used by all AI tools to personalise responses.
+
+| Field | Description | Example |
+|---|---|---|
+| Company Profile | Description of agency, location, target customers | "Pune-based agency, motor + health, serving individuals and SMEs" |
+| Products / Services | Comma-separated insurance products sold | "Motor Insurance, Health Insurance, Term Life, Personal Accident" |
+
+### How It Works
+- **MASTER_ADMIN** → Agencies page → Add/Edit Profile button per agency
+- **AGENCY_ADMIN** → Business Profile page in sidebar → edit own profile
+
+### AI Tools That Use It
+| Tool | How profile is used |
+|---|---|
+| Smart Remarks | Writes remarks relevant to agency's insurance type |
+| Follow-up Generator | Personalises messages for agency's specific services |
+| Lead Scoring | Boosts score if lead's service matches agency's core focus |
+| CRM Chatbot | Answers questions with full business context |
+
+```sql
+-- DB columns added to agencies table
+business_profile  TEXT  -- Company description
+business_services TEXT  -- Products/services sold
+```
 
 ---
 
@@ -382,6 +414,7 @@ git checkout master && npm run build && pm2 restart all --update-env
 | AI Tools page | client/src/pages/ai-tools.tsx |
 | Payment History page | client/src/pages/payment-history.tsx |
 | Performance page | client/src/pages/performance.tsx |
+| Agency Business Profile page | client/src/pages/agency-profile.tsx |
 | Plan & Upgrade page | client/src/pages/upgrade-requests.tsx |
 | Sidebar nav | client/src/components/app-sidebar.tsx |
 | Subscription banner | client/src/components/SubscriptionBanner.tsx |
@@ -465,4 +498,4 @@ git checkout master && npm run build && pm2 restart all --update-env
 
 ---
 
-*Last updated: March 21, 2026 | v8.9 | Sameer | ICA — Innovation, Consulting & Automation*
+*Last updated: March 21, 2026 | v9.0 | Sameer | ICA — Innovation, Consulting & Automation*
