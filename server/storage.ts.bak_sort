@@ -255,7 +255,7 @@ export class DatabaseStorage implements IStorage {
     }
     const where = and(...conditions);
     const [totalResult] = await db.select({ count: count() }).from(leads).where(where);
-    const result = await db.select().from(leads).where(where).orderBy(status === "FOLLOW_UP" ? asc(leads.followUpDate) : desc(leads.createdAt)).limit(limit).offset(offset);
+    const result = await db.select().from(leads).where(where).orderBy(desc(leads.createdAt)).limit(limit).offset(offset);
     return { leads: result, total: totalResult.count };
   }
 
@@ -269,7 +269,7 @@ export class DatabaseStorage implements IStorage {
     }
     const where = and(...conditions);
     const [totalResult] = await db.select({ count: count() }).from(leads).where(where);
-    const result = await db.select().from(leads).where(where).orderBy(status === "FOLLOW_UP" ? asc(leads.followUpDate) : desc(leads.createdAt)).limit(limit).offset(offset);
+    const result = await db.select().from(leads).where(where).orderBy(desc(leads.createdAt)).limit(limit).offset(offset);
     return { leads: result, total: totalResult.count };
   }
 
@@ -394,8 +394,7 @@ export class DatabaseStorage implements IStorage {
     let avgContactHours = 72; // worst-case default (no worked leads)
     if (workedLeads.length > 0) {
       const hours = workedLeads.map(l => {
-        const contactTime = l.firstContactedAt?.getTime() ?? l.updatedAt?.getTime() ?? now.getTime();
-        const diffMs = contactTime - (l.createdAt?.getTime() ?? now.getTime());
+        const diffMs = (l.updatedAt?.getTime() ?? now.getTime()) - (l.createdAt?.getTime() ?? now.getTime());
         return Math.min(Math.max(0, diffMs / 3_600_000), 72);
       });
       avgContactHours = hours.reduce((a, b) => a + b, 0) / hours.length;

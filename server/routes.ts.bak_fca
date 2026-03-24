@@ -609,10 +609,6 @@ export async function registerRoutes(
       }
 
       const oldStatus = lead.status;
-      // Set firstContactedAt once when lead moves out of NEW for the first time
-      if (oldStatus === "NEW" && updateData.status && updateData.status !== "NEW" && !lead.firstContactedAt) {
-        updateData.firstContactedAt = new Date();
-      }
       const updated = await storage.updateLead(req.params.id, updateData);
 
       if (req.body.status && req.body.status !== oldStatus) {

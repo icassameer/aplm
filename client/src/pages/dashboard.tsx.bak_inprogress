@@ -182,14 +182,9 @@ function AgencyAdminDashboard({ data }: { data: any }) {
     .filter(([_, v]) => (v as number) > 0)
     .map(([key, value]) => ({ name: STATUS_LABELS[key] || key, value: value as number, color: STATUS_COLORS[key] || "#888" }));
 
-  const inProgressCount = (stats.CONTACTED || 0) + (stats.FOLLOW_UP || 0) + (stats.CONVERTED || 0) + (stats.NOT_INTERESTED || 0);
-  const barData = [
-    { name: "New", count: stats.NEW || 0, fill: STATUS_COLORS["NEW"] || "#888" },
-    { name: "In Progress", count: inProgressCount, fill: STATUS_COLORS["CONTACTED"] || "#888" },
-    { name: "Follow Up", count: stats.FOLLOW_UP || 0, fill: STATUS_COLORS["FOLLOW_UP"] || "#888" },
-    { name: "Converted", count: stats.CONVERTED || 0, fill: STATUS_COLORS["CONVERTED"] || "#888" },
-    { name: "Not Interested", count: stats.NOT_INTERESTED || 0, fill: STATUS_COLORS["NOT_INTERESTED"] || "#888" },
-  ];
+  const barData = Object.entries(stats).map(([key, value]) => ({
+    name: STATUS_LABELS[key] || key, count: value as number, fill: STATUS_COLORS[key] || "#888",
+  }));
 
   const perfData = data?.telecallerPerformances || [];
 

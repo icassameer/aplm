@@ -21,7 +21,7 @@ import {
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
   NEW: { label: "New", color: "bg-chart-1 text-white dark:text-white", icon: AlertCircle },
-  IN_PROGRESS: { label: "In Progress", color: "bg-chart-2 text-white dark:text-white", icon: Phone },
+  CONTACTED: { label: "Contacted", color: "bg-chart-2 text-white dark:text-white", icon: Phone },
   FOLLOW_UP: { label: "Follow Up", color: "bg-chart-5 text-white dark:text-white", icon: Clock },
   CONVERTED: { label: "Converted", color: "bg-chart-4 text-white dark:text-white", icon: CheckCircle2 },
   NOT_INTERESTED: { label: "Not Interested", color: "bg-destructive text-destructive-foreground", icon: XCircle },
@@ -292,6 +292,7 @@ export default function LeadsPage() {
               <SelectContent>
                 <SelectItem value="ALL">All Status</SelectItem>
                 <SelectItem value="NEW">New</SelectItem>
+                <SelectItem value="CONTACTED">Contacted</SelectItem>
                 <SelectItem value="FOLLOW_UP">Follow Up</SelectItem>
                 <SelectItem value="CONVERTED">Converted</SelectItem>
                 <SelectItem value="NOT_INTERESTED">Not Interested</SelectItem>
@@ -436,9 +437,7 @@ export default function LeadsPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {Object.entries(statusConfig).map(([key, config]) => {
             const StatusIcon = config.icon;
-            const count = key === "IN_PROGRESS"
-              ? (leadStatsData?.["CONTACTED"] || 0) + (leadStatsData?.["FOLLOW_UP"] || 0) + (leadStatsData?.["CONVERTED"] || 0) + (leadStatsData?.["NOT_INTERESTED"] || 0)
-              : leadStatsData?.[key] || 0;
+            const count = leadStatsData?.[key] || 0;
             return (
               <Card key={key} data-testid={`card-stat-${key}`}>
                 <CardContent className="p-5 text-center">
