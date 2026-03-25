@@ -45,7 +45,6 @@ export default function AIToolsPage() {
   const [bulkSending, setBulkSending] = useState(false);
   const [bulkSentCount, setBulkSentCount] = useState(0);
   const [bulkCurrentIdx, setBulkCurrentIdx] = useState(-1);
-  const [bulkStatusFilter, setBulkStatusFilter] = useState("ALL");
 
   // Fetch agency leads for bulk WhatsApp
   const { data: leadsData } = useQuery({
@@ -53,9 +52,7 @@ export default function AIToolsPage() {
     queryFn: () => apiFetch("/api/leads?limit=50"),
     enabled: user?.role === "AGENCY_ADMIN",
   });
-  const agencyLeads = (leadsData?.leads || []).filter((l: any) =>
-    bulkStatusFilter === "ALL" ? true : l.status === bulkStatusFilter
-  );
+  const agencyLeads = leadsData?.leads || [];
 
   const polishBulkMessage = async () => {
     if (!bulkRawMsg.trim()) return;
@@ -427,20 +424,8 @@ export default function AIToolsPage() {
                 </div>
                 {/* Right — Lead selector */}
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="text-xs text-muted-foreground font-medium">Filter:</p>
-                    {["ALL","NEW","FOLLOW_UP","CONVERTED","NOT_INTERESTED"].map(s => (
-                      <button
-                        key={s}
-                        onClick={() => { setBulkStatusFilter(s); setBulkSelectedLeads([]); }}
-                        className={`text-xs px-2 py-1 rounded-full border transition-colors ${bulkStatusFilter === s ? "bg-green-600 text-white border-green-600" : "bg-background text-muted-foreground hover:border-foreground"}`}
-                      >
-                        {s === "ALL" ? "All" : s === "FOLLOW_UP" ? "Follow Up" : s === "NOT_INTERESTED" ? "Not Interested" : s.charAt(0) + s.slice(1).toLowerCase()}
-                      </button>
-                    ))}
-                  </div>
                   <div className="flex items-center justify-between">
-                    <p className="text-xs text-muted-foreground font-medium">2. Select leads ({bulkSelectedLeads.length}/50) {bulkStatusFilter !== "ALL" ? `— ${bulkStatusFilter.replace("_"," ")}` : ""}</p>
+                    <p className="text-xs text-muted-foreground font-medium">2. Select leads ({bulkSelectedLeads.length}/50)</p>
                     <div className="flex items-center gap-3">
                       <button
                         onClick={() => setBulkSelectedLeads(agencyLeads.slice(0, 50).map((l: any) => l.id))}
