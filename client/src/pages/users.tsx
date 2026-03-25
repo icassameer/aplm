@@ -120,7 +120,7 @@ export default function UsersPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
         <Skeleton className="h-8 w-48" />
         <div className="grid gap-4">
           {[1, 2, 3].map(i => <Skeleton key={i} className="h-20" />)}
@@ -130,7 +130,7 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">Team Members</h1>

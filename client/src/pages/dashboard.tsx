@@ -58,7 +58,7 @@ export default function DashboardPage() {
 
 function MasterDashboard({ data }: { data: any }) {
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">Global Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-1">System-wide overview across all agencies</p>
@@ -194,7 +194,7 @@ function AgencyAdminDashboard({ data }: { data: any }) {
   const perfData = data?.telecallerPerformances || [];
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">Agency Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -352,7 +352,7 @@ function TeamLeaderDashboard({ data }: { data: any }) {
   }));
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">Team Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -436,7 +436,7 @@ function TelecallerDashboard({ data }: { data: any }) {
   ];
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">My Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-1">Your personal performance overview</p>
@@ -586,7 +586,7 @@ function MetricBar({ label, value, weight, color, isNegative }: {
 
 function DashboardSkeleton() {
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       <div className="space-y-2">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-4 w-64" />

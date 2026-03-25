@@ -51,7 +51,7 @@ export default function PerformancePage() {
 
   if (isLoading) {
     return (
-      <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
+      <div className="p-6 space-y-6 max-w-7xl mx-auto">
         <Skeleton className="h-8 w-48" />
         <div className="grid gap-4">{[1, 2, 3].map(i => <Skeleton key={i} className="h-40" />)}</div>
       </div>
@@ -93,7 +93,7 @@ function PersonalPerformance({ data }: { data: any }) {
       {/* Overall score hero */}
       <Card className={`border-2 ${scoreInfo.bg}`}>
         <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <p className="text-sm text-muted-foreground mb-1">Overall Score</p>
               <div className="flex items-end gap-3">
@@ -264,7 +264,7 @@ function TeamPerformance({ data }: { data: any[] }) {
   const medals = ["text-yellow-500", "text-slate-400", "text-amber-700"];
 
   return (
-    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
+    <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">Team Performance</h1>
         <p className="text-sm text-muted-foreground mt-1">Telecaller rankings and KPIs</p>

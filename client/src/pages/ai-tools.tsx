@@ -397,7 +397,7 @@ export default function AIToolsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 {/* Left — Message composer */}
                 <div className="space-y-3">
                   <p className="text-xs text-muted-foreground font-medium">1. Type your rough message idea</p>
@@ -427,7 +427,7 @@ export default function AIToolsPage() {
                 </div>
                 {/* Right — Lead selector */}
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <p className="text-xs text-muted-foreground font-medium">Filter:</p>
                     {["ALL","NEW","FOLLOW_UP","CONVERTED","NOT_INTERESTED"].map(s => (
                       <button

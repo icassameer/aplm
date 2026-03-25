@@ -39,7 +39,7 @@ export default function AuditLogsPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
         <Skeleton className="h-8 w-48" />
         <div className="grid gap-3">{[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-16" />)}</div>
       </div>
@@ -47,7 +47,7 @@ export default function AuditLogsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold tracking-tight" data-testid="text-page-title">Audit Logs</h1>
         <p className="text-sm text-muted-foreground mt-1">Track all lead status changes ({total} total)</p>

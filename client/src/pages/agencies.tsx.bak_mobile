@@ -201,7 +201,7 @@ export default function AgenciesPage() {
 
   if (isLoading) {
     return (
-      <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
+      <div className="p-6 space-y-6 max-w-7xl mx-auto">
         <Skeleton className="h-8 w-48" />
         <div className="grid gap-4">{[1, 2, 3].map(i => <Skeleton key={i} className="h-32" />)}</div>
       </div>
@@ -209,7 +209,7 @@ export default function AgenciesPage() {
   }
 
   return (
-    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
+    <div className="p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
@@ -218,7 +218,7 @@ export default function AgenciesPage() {
             Manage all registered agencies — {total} total
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setProspectOpen(true)} data-testid="button-send-prospect">
             <Mail className="w-4 h-4 mr-2" />
             Send Prospect Email
