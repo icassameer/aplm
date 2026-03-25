@@ -164,6 +164,12 @@ ADDON_WEBHOOK_SECRET=<addon webhook secret from Razorpay>
 | Send Prospect Email UI | ✅ | MASTER_ADMIN → Agencies → Send Prospect Email |
 | Email templates audit | ✅ | Correct pricing, features, add-ons in all emails |
 | Agency Business Profile | ✅ | Company profile + services stored per agency — injected into all 4 AI tools |
+| AI Suggest Remark in Update dialog | ✅ | ✨ button in Update Lead popup — status-aware, one-click Use — PRO/ENT only |
+| Bulk WhatsApp Messenger | ✅ | AI Tools page — AGENCY_ADMIN, 50 leads, AI polish, status filter, select all, one-by-one |
+| In Progress stat card | ✅ | Replaces Contacted — shows all touched leads |
+| Follow Up date sort | ✅ | Leads sorted by nearest follow-up date when Follow Up filter active |
+| firstContactedAt timestamp | ✅ | New DB column — accurate speed-to-contact scoring |
+| Sparkle panel removed | ✅ | Lead cards cleaned — AI Suggest moved to Update dialog |
 
 ---
 
@@ -442,6 +448,9 @@ git checkout master && npm run build && pm2 restart all --update-env
 | Activate button fails | Check token — logout and login again |
 | SSL expired | `certbot renew && systemctl reload nginx` |
 | Leads page blank | Hard refresh (Ctrl+Shift+R) — likely JS cache |
+| AI Suggest not showing | Agency must be PRO or ENTERPRISE plan |
+| Bulk WhatsApp not visible | Only AGENCY_ADMIN role sees this in AI Tools |
+| Second wa.me not opening | Browser popup blocker — use Next Contact button |
 | Cron sending duplicate emails | Check pm2 logs — instance 1 should show "Cron skipped" |
 
 ---
@@ -450,6 +459,8 @@ git checkout master && npm run build && pm2 restart all --update-env
 
 | Tag | Date | Description |
 |-----|------|-------------|
+| `v9.2` | Mar 25, 2026 | AI Suggest remark, Bulk WhatsApp, In Progress stat, Follow Up sort, firstContactedAt |
+| `v9.1` | Mar 21, 2026 | Agency Business Profile |
 | `v8.9` | Mar 21, 2026 | Prospect email UI, email audit fixes, add-ons in emails, scoring v2, performance page, pagination, cron dedup, select-all checkbox |
 | `v8.7` | Mar 21, 2026 | Select all on current page checkbox for Team Leader bulk assign |
 | `v8.6` | Mar 21, 2026 | Agencies + payments pagination, 7-day processingJobs cleanup cron |
@@ -498,4 +509,4 @@ git checkout master && npm run build && pm2 restart all --update-env
 
 ---
 
-*Last updated: March 21, 2026 | v9.0 | Sameer | ICA — Innovation, Consulting & Automation*
+*Last updated: March 25, 2026 | v9.2 | Sameer | ICA — Innovation, Consulting & Automation*
