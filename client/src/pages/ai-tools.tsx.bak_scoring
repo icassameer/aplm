@@ -27,6 +27,10 @@ export default function AIToolsPage() {
   const [followupResult, setFollowupResult] = useState("");
   const [followupLoading, setFollowupLoading] = useState(false);
 
+  // Lead scoring state
+  const [scoreForm, setScoreForm] = useState({ leadName: "", service: "", status: "NEW", source: "", remarks: "" });
+  const [scoreResult, setScoreResult] = useState<any>(null);
+  const [scoreLoading, setScoreLoading] = useState(false);
 
   // Chatbot state
   const [chatQuestion, setChatQuestion] = useState("");
@@ -165,6 +169,23 @@ export default function AIToolsPage() {
     setFollowupLoading(false);
   };
 
+  const scoreLead = async () => {
+    setScoreLoading(true);
+    setScoreResult(null);
+    try {
+      const res = await fetch("/api/ai/score-lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(scoreForm),
+      });
+      const data = await res.json();
+      if (data.success) setScoreResult(data);
+      else toast({ title: "Error", description: data.message, variant: "destructive" });
+    } catch {
+      toast({ title: "Error", description: "AI service unavailable", variant: "destructive" });
+    }
+    setScoreLoading(false);
+  };
 
   const askChatbot = async () => {
     if (!chatQuestion.trim()) return;
@@ -190,6 +211,11 @@ export default function AIToolsPage() {
     setChatLoading(false);
   };
 
+  const scoreLabelColor: Record<string, string> = {
+    Hot: "bg-red-100 text-red-700 border-red-200",
+    Warm: "bg-yellow-100 text-yellow-700 border-yellow-200",
+    Cold: "bg-blue-100 text-blue-700 border-blue-200",
+  };
 
   const statusOptions = ["NEW", "CONTACTED", "FOLLOW_UP", "CONVERTED", "NOT_INTERESTED"];
 
@@ -282,9 +308,51 @@ export default function AIToolsPage() {
           </CardContent>
         </Card>
 
+        {/* Lead Scoring */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Brain className="w-4 h-4 text-orange-500" />
+              Lead scoring
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Input placeholder="Lead name" value={scoreForm.leadName}
+              onChange={e => setScoreForm(p => ({ ...p, leadName: e.target.value }))} />
+            <Input placeholder="Service" value={scoreForm.service}
+              onChange={e => setScoreForm(p => ({ ...p, service: e.target.value }))} />
+            <div className="flex gap-2">
+              <select className="flex-1 border rounded-md px-3 py-2 text-sm bg-background"
+                value={scoreForm.status} onChange={e => setScoreForm(p => ({ ...p, status: e.target.value }))}>
+                {statusOptions.map(s => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
+              </select>
+              <Input className="flex-1" placeholder="Source" value={scoreForm.source}
+                onChange={e => setScoreForm(p => ({ ...p, source: e.target.value }))} />
+            </div>
+            <Input placeholder="Last remarks (optional)" value={scoreForm.remarks}
+              onChange={e => setScoreForm(p => ({ ...p, remarks: e.target.value }))} />
+            <Button className="w-full" onClick={scoreLead} disabled={scoreLoading || !scoreForm.leadName}>
+              {scoreLoading ? "Scoring..." : "✨ Score this lead"}
+            </Button>
+            {scoreLoading && <Skeleton className="h-16" />}
+            {scoreResult && (
+              <div className="bg-muted rounded-md p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-3xl font-bold">{scoreResult.score}<span className="text-lg text-muted-foreground">/100</span></span>
+                  <Badge className={`text-sm ${scoreLabelColor[scoreResult.label] || ""}`}>{scoreResult.label}</Badge>
+                </div>
+                <div className="w-full bg-background rounded-full h-2">
+                  <div className="h-2 rounded-full transition-all"
+                    style={{ width: `${scoreResult.score}%`, background: scoreResult.label === "Hot" ? "#ef4444" : scoreResult.label === "Warm" ? "#f59e0b" : "#3b82f6" }} />
+                </div>
+                <p className="text-sm text-muted-foreground">{scoreResult.reason}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* AI Chatbot */}
-        <Card className="lg:col-span-2">
+        <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Bot className="w-4 h-4 text-blue-500" />
