@@ -5,7 +5,7 @@ const FROM = process.env.FROM_EMAIL || "support@icaweb.in";
 const FROM_NAME = "ICA CRM";
 
 // ── Helper ────────────────────────────────────────────────────────────────────
-async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
+export async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
   if (!process.env.RESEND_API_KEY) {
     console.warn("RESEND_API_KEY not set — skipping email");
     return false;

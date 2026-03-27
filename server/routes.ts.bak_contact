@@ -15,7 +15,7 @@ import { z } from "zod";
 import type { User } from "@shared/schema";
 import { loginSchema, signUpSchema, roleEnum, planEnum, leadStatusEnum } from "@shared/schema";
 import { openai, speechToText, transcribeLargeAudio, ensureCompatibleFormat } from "./replit_integrations/audio/client";
-import { sendEmail, sendWelcomeEmail, sendProspectEmail, sendPasswordResetEmail, sendPlanUpgradeEmail, sendPaymentLinkEmail,
+import { sendWelcomeEmail, sendProspectEmail, sendPasswordResetEmail, sendPlanUpgradeEmail, sendPaymentLinkEmail,
   sendPaymentSuccessEmail,
 } from "./email";
 import Anthropic from "@anthropic-ai/sdk";
@@ -2056,45 +2056,6 @@ ${businessContext4 ? `About this agency:\n${businessContext4}\n` : ""}${crmConte
   });
 
   // ── Email API Endpoints ────────────────────────────────────────────────────
-
-  // Public contact form from website — no auth required
-  app.post("/api/contact", async (req: Request, res: Response) => {
-    try {
-      const { name, phone, email, interest, message } = req.body;
-      if (!name || !phone) return res.status(400).json({ success: false, message: "Name and phone required" });
-
-      const html = `
-        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#f9f9f9;border-radius:12px;">
-          <div style="background:#0d1b4b;padding:20px 24px;border-radius:8px 8px 0 0;">
-            <h2 style="color:#00c853;margin:0;font-size:20px;">New Website Inquiry</h2>
-            <p style="color:rgba(255,255,255,0.6);margin:4px 0 0;font-size:13px;">icaweb.in Contact Form</p>
-          </div>
-          <div style="background:#ffffff;padding:24px;border-radius:0 0 8px 8px;border:1px solid #e5e5e5;border-top:none;">
-            <table style="width:100%;border-collapse:collapse;">
-              <tr><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;color:#666;font-size:13px;width:120px;">Name</td><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-weight:600;font-size:14px;">${name}</td></tr>
-              <tr><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;color:#666;font-size:13px;">Phone</td><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-weight:600;font-size:14px;"><a href="tel:${phone}" style="color:#0d1b4b;">${phone}</a></td></tr>
-              <tr><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;color:#666;font-size:13px;">Email</td><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;">${email || "—"}</td></tr>
-              <tr><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;color:#666;font-size:13px;">Interest</td><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;"><span style="background:#e8f5e9;color:#2e7d32;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;">${interest || "—"}</span></td></tr>
-              <tr><td style="padding:10px 0;color:#666;font-size:13px;">Message</td><td style="padding:10px 0;font-size:14px;color:#333;">${message || "—"}</td></tr>
-            </table>
-            <div style="margin-top:20px;padding:12px 16px;background:#e8f5e9;border-radius:8px;font-size:13px;color:#2e7d32;">
-              <strong>Quick Reply:</strong> <a href="WALINK" style="color:#2e7d32;">Reply on WhatsApp →</a>
-            </div>
-          </div>
-          <p style="text-align:center;color:#aaa;font-size:11px;margin-top:16px;">ICA — Innovation, Consulting & Automation · icaweb.in</p>
-        </div>`;
-
-      const cleanPhone = phone.replace(/[^0-9]/g, '');
-      const waLink = `https://wa.me/91${cleanPhone}?text=Hi%20${name}%2C%20thanks%20for%20your%20interest%20in%20ICA%20CRM!`;
-      const finalHtml = html.replace('WALINK', waLink);
-      const sent = await sendEmail("support@icaweb.in", `New Inquiry: ${name} — ${interest || "ICA Products"}`, finalHtml);
-      console.log(`Contact form: ${name} ${phone} — email sent: ${sent}`);
-      res.json({ success: true, message: "Inquiry received" });
-    } catch (error: any) {
-      console.error("Contact form error:", error);
-      res.status(500).json({ success: false, message: "Failed to send" });
-    }
-  });
 
   // Send prospect inquiry email
   app.post("/api/email/prospect", authMiddleware, roleMiddleware("MASTER_ADMIN"), async (req: AuthRequest, res: Response) => {

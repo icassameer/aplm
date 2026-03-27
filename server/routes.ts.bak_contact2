@@ -15,7 +15,7 @@ import { z } from "zod";
 import type { User } from "@shared/schema";
 import { loginSchema, signUpSchema, roleEnum, planEnum, leadStatusEnum } from "@shared/schema";
 import { openai, speechToText, transcribeLargeAudio, ensureCompatibleFormat } from "./replit_integrations/audio/client";
-import { sendEmail, sendWelcomeEmail, sendProspectEmail, sendPasswordResetEmail, sendPlanUpgradeEmail, sendPaymentLinkEmail,
+import { sendWelcomeEmail, sendProspectEmail, sendPasswordResetEmail, sendPlanUpgradeEmail, sendPaymentLinkEmail,
   sendPaymentSuccessEmail,
 } from "./email";
 import Anthropic from "@anthropic-ai/sdk";
@@ -2078,17 +2078,13 @@ ${businessContext4 ? `About this agency:\n${businessContext4}\n` : ""}${crmConte
               <tr><td style="padding:10px 0;color:#666;font-size:13px;">Message</td><td style="padding:10px 0;font-size:14px;color:#333;">${message || "—"}</td></tr>
             </table>
             <div style="margin-top:20px;padding:12px 16px;background:#e8f5e9;border-radius:8px;font-size:13px;color:#2e7d32;">
-              <strong>Quick Reply:</strong> <a href="WALINK" style="color:#2e7d32;">Reply on WhatsApp →</a>
+              <strong>Quick Reply:</strong> <a href="https://wa.me/91${phone.replace(/\D/g,'')}?text=Hi ${encodeURIComponent(name)}, thanks for your interest in ICA CRM!" style="color:#2e7d32;">Reply on WhatsApp →</a>
             </div>
           </div>
           <p style="text-align:center;color:#aaa;font-size:11px;margin-top:16px;">ICA — Innovation, Consulting & Automation · icaweb.in</p>
         </div>`;
 
-      const cleanPhone = phone.replace(/[^0-9]/g, '');
-      const waLink = `https://wa.me/91${cleanPhone}?text=Hi%20${name}%2C%20thanks%20for%20your%20interest%20in%20ICA%20CRM!`;
-      const finalHtml = html.replace('WALINK', waLink);
-      const sent = await sendEmail("support@icaweb.in", `New Inquiry: ${name} — ${interest || "ICA Products"}`, finalHtml);
-      console.log(`Contact form: ${name} ${phone} — email sent: ${sent}`);
+      await sendEmail("support@icaweb.in", `New Inquiry: ${name} — ${interest || "ICA Products"}`, html);
       res.json({ success: true, message: "Inquiry received" });
     } catch (error: any) {
       console.error("Contact form error:", error);
