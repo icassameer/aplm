@@ -2,7 +2,7 @@ import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.FROM_EMAIL || "support@icaweb.in";
-const FROM_NAME = "ICA CRM";
+const FROM_NAME = "ICA Team";
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 export async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
