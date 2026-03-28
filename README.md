@@ -72,7 +72,7 @@ ADDON_WEBHOOK_SECRET=<addon webhook secret from Razorpay>
 | AI Suite | Anthropic Claude — Haiku (scoring/remarks) + Sonnet (chatbot) |
 | Email | Resend API — domain icaweb.in (Verified) |
 | Payments | Razorpay (live) — UPI, Cards, NetBanking, Wallets, EMI |
-| Process Manager | PM2 cluster (2 instances) |
+| Process Manager | PM2 fork mode (1 instance) |
 | Web Server | Nginx + SSL (Let's Encrypt) |
 | Security | helmet.js + CORS + rate-limit + Zod validation |
 
@@ -375,7 +375,7 @@ pm2 status
 pm2 logs ica-crm --lines 50
 
 # Deploy
-git pull origin master && npm run build && pm2 restart all --update-env
+git pull origin master && npm run build && pm2 restart ica-crm
 
 # Edit env
 nano /var/www/ica-crm/.env && pm2 restart all --update-env
@@ -509,4 +509,4 @@ git checkout master && npm run build && pm2 restart all --update-env
 
 ---
 
-*Last updated: March 25, 2026 | v9.2 | Sameer | ICA — Innovation, Consulting & Automation*
+*Last updated: March 28, 2026 | v9.3 | Sameer | ICA — Innovation, Consulting & Automation*
