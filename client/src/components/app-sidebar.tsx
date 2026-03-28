@@ -20,7 +20,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import icaLogo from "@assets/ica-logo_1772293580977.jpg";
+import aplmLogo from "@assets/aplm.jpeg";
 
 const roleLabels: Record<string, string> = {
   MASTER_ADMIN: "Master Admin",
@@ -50,14 +50,14 @@ export function AppSidebar() {
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
           <img
-            src={icaLogo}
-            alt="ICA"
+            src={aplmLogo}
+            alt="APLM"
             className="w-9 h-9 rounded-md object-cover"
             data-testid="img-sidebar-logo"
           />
           <div className="flex-1 min-w-0">
-            <h2 className="font-bold text-sm tracking-tight">ICA CRM</h2>
-            <p className="text-[10px] text-muted-foreground truncate">Innovation, Consulting & Automation</p>
+            <h2 className="font-bold text-sm tracking-tight">APLM CRM</h2>
+            <p className="text-[10px] text-muted-foreground truncate">APLM Sales & Marketing</p>
           </div>
         </div>
       </SidebarHeader>
@@ -115,7 +115,7 @@ export function AppSidebar() {
         </DropdownMenu>
 
         <div className="pt-3 mt-2 border-t text-center">
-          <p className="text-[10px] text-muted-foreground">ICA - Innovation, Consulting & Automation</p>
+          <p className="text-[10px] text-muted-foreground">Powered by ICA — Innovation, Consulting & Automation</p>
           <p className="text-[10px] text-muted-foreground">Support: +91 9967969850</p>
         </div>
       </SidebarFooter>
