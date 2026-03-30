@@ -59,7 +59,7 @@ export default function LeadsPage() {
     name: "", phone: "", email: "", source: "", remarks: "", service: ""
   });
   const [editForm, setEditForm] = useState({
-    status: "", remarks: "", followUpDate: ""
+    status: "", remarks: "", followUpDate: "", service: ""
   });
   const [assignTo, setAssignTo] = useState("");
   const [assignService, setAssignService] = useState("");
@@ -567,6 +567,7 @@ export default function LeadsPage() {
                                 status: lead.status,
                                 remarks: lead.remarks || "",
                                 followUpDate: lead.followUpDate ? new Date(lead.followUpDate).toISOString().split("T")[0] : "",
+                                service: lead.service || "",
                               });
                               setAiSuggestion("");
                               setEditOpen(true);
@@ -647,6 +648,20 @@ export default function LeadsPage() {
                 </SelectContent>
               </Select>
             </div>
+            {services.length > 0 && (
+              <div className="space-y-2">
+                <Label>Service</Label>
+                <Select value={editForm.service} onValueChange={(v) => setEditForm({ ...editForm, service: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select service (optional)" /></SelectTrigger>
+                  <SelectContent>
+                    {services.map((s: any) => (
+                      <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Change service if a different product was sold</p>
+              </div>
+            )}
             {editForm.status === "FOLLOW_UP" && (
               <div className="space-y-2">
                 <Label>Follow-up Date</Label>
