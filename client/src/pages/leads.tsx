@@ -39,7 +39,7 @@ export default function LeadsPage() {
 
 ;
   const [page, setPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState(user?.role === "TELE_CALLER" ? "NEW" : "ALL");
   const [assignmentFilter, setAssignmentFilter] = useState(user?.role === "TEAM_LEADER" ? "UNASSIGNED" : "ALL");
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
