@@ -250,7 +250,7 @@ export default function UsersPage() {
                       <KeyRound className="w-4 h-4" />
                     </Button>
                   )}
-                  {user?.role === "MASTER_ADMIN" && u.role !== "MASTER_ADMIN" && (
+                  {(user?.role === "MASTER_ADMIN" || user?.role === "AGENCY_ADMIN") && u.role !== "MASTER_ADMIN" && u.role !== "AGENCY_ADMIN" && (
                     <Button
                       variant="destructive" size="sm"
                       onClick={() => { if (confirm(`Delete user "${u.fullName}"? This will also remove their assigned leads and data.`)) deleteUserMutation.mutate(u.id); }}

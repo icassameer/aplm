@@ -515,12 +515,15 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/users/:id", authMiddleware, roleMiddleware("MASTER_ADMIN"), async (req: AuthRequest, res: Response) => {
+  app.delete("/api/users/:id", authMiddleware, roleMiddleware("MASTER_ADMIN", "AGENCY_ADMIN"), async (req: AuthRequest, res: Response) => {
     try {
       const targetUser = await storage.getUser(req.params.id);
       if (!targetUser) return res.status(404).json({ success: false, message: "User not found" });
       if (targetUser.role === "MASTER_ADMIN") {
         return res.status(403).json({ success: false, message: "Cannot delete Master Admin" });
+      }
+      if (req.user!.role === "AGENCY_ADMIN" && targetUser.agencyCode !== req.user!.agencyCode) {
+        return res.status(403).json({ success: false, message: "Access denied" });
       }
       await storage.deleteUser(req.params.id);
       res.json({ success: true, message: "User deleted successfully" });
