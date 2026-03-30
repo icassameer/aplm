@@ -2042,7 +2042,7 @@ app.post("/api/ai/suggest-remark", authMiddleware, roleMiddleware("TELE_CALLER",
       messages: [{
         role: "user",
         content: polishMode && previousRemark
-          ? `You are a CRM assistant. Polish this remark to be professional and match the outcome. Status: ${status} (CONVERTED = sale done, confirmed language only). Fix grammar/clarity. 2-3 sentences max.\nRemark: "${previousRemark}"`
+          ? `You are a CRM assistant. Rewrite this remark professionally for an insurance telecaller. Status is ${status}. CONVERTED means policy sold — use confident past tense like "Customer agreed", "Policy confirmed", "Sale completed". Do NOT suggest follow-ups for CONVERTED. Return ONLY the rewritten remark. No extra text, no quotes, no options.\nOriginal remark: ${previousRemark}`
           : `You are a CRM assistant for an Indian insurance/financial services agency. Write a short, professional call remark in English (2-3 sentences max) for a telecaller to log after a call.\n${businessContext ? `Agency context:\n${businessContext}\n` : ""}Lead details:\n- Name: ${leadName}\n- Service interested in: ${service || "General inquiry"}\n- Call outcome: ${status}\n- Previous remark: ${previousRemark || "None"}\nWrite only the remark text, nothing else. Keep it factual, professional, and specific to the outcome.`
       }]
     });
