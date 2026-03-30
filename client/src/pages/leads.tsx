@@ -544,7 +544,7 @@ export default function LeadsPage() {
                               </span>
                             )}
                           </div>
-                          {lead.remarks && <p className="text-xs text-muted-foreground mt-1 truncate">{lead.remarks}</p>}
+                          {lead.remarks && <p className="text-xs text-muted-foreground mt-1 line-clamp-2 break-words">{lead.remarks}</p>}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end w-full sm:w-auto">
@@ -672,6 +672,7 @@ export default function LeadsPage() {
                           status: editForm.status,
                           service: selectedLead.service || "",
                           previousRemark: editForm.remarks || "",
+                          polishMode: true,
                         }),
                       });
                       const res = await rawRes.json();
@@ -685,7 +686,7 @@ export default function LeadsPage() {
                   className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 transition-colors disabled:opacity-50"
                 >
                   {aiRemarkLoading ? <span className="w-3 h-3 border border-violet-500 border-t-transparent rounded-full animate-spin" /> : <span>✨</span>}
-                  {aiRemarkLoading ? "Generating..." : "AI Suggest"}
+                  {aiRemarkLoading ? "Polishing..." : "Polish with AI"}
                 </button>
               </div>
               {aiSuggestion && (
@@ -694,10 +695,10 @@ export default function LeadsPage() {
                     <p className="flex-1 leading-relaxed">{aiSuggestion}</p>
                     <button type="button" onClick={() => { setEditForm({ ...editForm, remarks: aiSuggestion }); setAiSuggestion(""); }} className="shrink-0 text-xs px-2 py-1 rounded bg-violet-600 hover:bg-violet-700 text-white transition-colors">Use</button>
                   </div>
-                  <p className="mt-1 text-xs text-violet-500">Click Use to copy into remarks, or type your own below.</p>
+                  <p className="mt-1 text-xs text-violet-500">AI polished version — click Use to apply, or edit below.</p>
                 </div>
               )}
-              <Textarea data-testid="input-edit-remarks" value={editForm.remarks} onChange={(e) => setEditForm({ ...editForm, remarks: e.target.value })} rows={3} placeholder="Enter remark or use AI suggestion above..." />
+              <Textarea data-testid="input-edit-remarks" value={editForm.remarks} onChange={(e) => setEditForm({ ...editForm, remarks: e.target.value })} rows={3} placeholder="Type your remark, then click Polish with AI to improve it..." />
             </div>
             <Button type="submit" className="w-full" disabled={updateMutation.isPending} data-testid="button-update-lead">
               {updateMutation.isPending ? "Updating..." : "Update Lead"}
