@@ -614,6 +614,17 @@ export async function registerRoutes(
         updateData.firstContactedAt = new Date();
       }
       const updated = await storage.updateLead(req.params.id, updateData);
+      if (req.body.status === "CONVERTED" && oldStatus !== "CONVERTED" && lead.assignedTo) {
+        try {
+          const agency = await storage.getAgencyByCode(lead.agencyCode);
+          let commissionAmount = agency?.commissionPerLead || 0;
+          if (lead.service) {
+            const svc = await storage.getServiceByName(lead.agencyCode, lead.service);
+            if (svc && svc.commissionAmount && svc.commissionAmount > 0) commissionAmount = svc.commissionAmount;
+          }
+          if (commissionAmount > 0) await storage.createCommission({ agencyCode: lead.agencyCode, userId: lead.assignedTo, leadId: lead.id, amount: commissionAmount, paidStatus: "PENDING", convertedAt: new Date() });
+        } catch (e) { console.error("[commission]", e); }
+      }
 
       if (req.body.status && req.body.status !== oldStatus) {
         await storage.createAuditLog({
@@ -844,7 +855,8 @@ export async function registerRoutes(
       if (!agencyCode) return res.status(400).json({ success: false, message: "No agency" });
       const { name } = req.body;
       if (!name) return res.status(400).json({ success: false, message: "Service name required" });
-      const service = await storage.createService({ agencyCode, name });
+      const commissionAmt = Number(req.body.commissionAmount) || 0;
+      const service = await storage.createService({ agencyCode, name, commissionAmount: commissionAmt });
       res.json({ success: true, data: service });
     } catch (error: any) {
       console.error(error);
