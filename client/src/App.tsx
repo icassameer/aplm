@@ -24,6 +24,8 @@ import ChangePasswordPage from "@/pages/change-password";
 import ApprovalsPage from "@/pages/approvals";
 import ReportsPage from "@/pages/reports";
 import ServicesPage from "@/pages/services";
+import AttendancePage from "@/pages/attendance";
+import CommissionPage from "@/pages/commission";
 import UpgradeRequestsPage from "@/pages/upgrade-requests";
 import RCLookupPage from "@/pages/rc-lookup";
 import PaymentPage from "@/pages/payment";
@@ -207,6 +209,12 @@ function AuthenticatedLayout() {
               </Route>
               <Route path="/rc-lookup">
                 <ProtectedRoute component={RCLookupPage} allowedRoles={["AGENCY_ADMIN", "TEAM_LEADER", "MASTER_ADMIN"]} />
+              </Route>
+              <Route path="/attendance">
+                <ProtectedRoute component={AttendancePage} allowedRoles={["AGENCY_ADMIN", "TEAM_LEADER", "TELE_CALLER"]} />
+              </Route>
+              <Route path="/commission">
+                <ProtectedRoute component={CommissionPage} allowedRoles={["AGENCY_ADMIN", "TEAM_LEADER", "TELE_CALLER"]} />
               </Route>
               <Route component={NotFound} />
             </Switch>

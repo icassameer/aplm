@@ -2,6 +2,7 @@ import { eq, and, or, desc, asc, count, sql, ilike, isNull, isNotNull, lt, gt } 
 import { db } from "./db";
 import {
   agencies, users, leads, auditLogs, meetings, services, upgradeRequests, rcRecords, processingJobs, payments,
+  attendance, commissions,
   type Agency, type InsertAgency,
   type User, type InsertUser,
   type Lead, type InsertLead,
@@ -11,6 +12,8 @@ import {
   type RcRecord, type InsertRcRecord,
   type ProcessingJob,
   type Payment, type InsertPayment,
+  type Attendance, type InsertAttendance,
+  type Commission, type InsertCommission,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -91,6 +94,20 @@ export interface IStorage {
   deleteJob(id: string): Promise<void>;
 
   getNotifications(userId: string, role: string, agencyCode: string | null): Promise<any[]>;
+  // v9.4 — Attendance
+  punchIn(data: InsertAttendance): Promise<Attendance>;
+  getTodayAttendance(userId: string, date: string): Promise<Attendance | undefined>;
+  getAttendanceByUser(userId: string, agencyCode: string): Promise<Attendance[]>;
+  getAttendanceByAgency(agencyCode: string, date?: string): Promise<Attendance[]>;
+  updateAttendance(id: string, data: Partial<Attendance>): Promise<Attendance | undefined>;
+  // v9.4 — Commissions
+  createCommission(data: InsertCommission): Promise<Commission>;
+  getCommissionsByUser(userId: string, agencyCode: string): Promise<Commission[]>;
+  getCommissionsByAgency(agencyCode: string): Promise<Commission[]>;
+  updateCommission(id: string, data: Partial<Commission>): Promise<Commission | undefined>;
+  // v9.4 — Service commission
+  updateService(id: string, data: Partial<Service>): Promise<Service | undefined>;
+  getServiceByName(agencyCode: string, name: string): Promise<Service | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {

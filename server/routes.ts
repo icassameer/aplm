@@ -862,6 +862,188 @@ export async function registerRoutes(
     }
   });
 
+  // v9.4 — Update service commission amount
+  app.patch("/api/services/:id", authMiddleware, roleMiddleware("AGENCY_ADMIN"), async (req: AuthRequest, res: Response) => {
+    try {
+      const { commissionAmount } = req.body;
+      if (commissionAmount === undefined) return res.status(400).json({ success: false, message: "commissionAmount required" });
+      const updated = await storage.updateService(req.params.id, { commissionAmount: Number(commissionAmount) });
+      res.json({ success: true, data: updated });
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // v9.4 — Set office location (Agency Admin)
+  app.patch("/api/agency/office-location", authMiddleware, roleMiddleware("AGENCY_ADMIN"), async (req: AuthRequest, res: Response) => {
+    try {
+      const agencyCode = req.user!.agencyCode;
+      if (!agencyCode) return res.status(400).json({ success: false, message: "No agency" });
+      const { officeLatitude, officeLongitude, officeRadiusMeters, commissionPerLead } = req.body;
+      const updateData: any = {};
+      if (officeLatitude !== undefined) updateData.officeLatitude = officeLatitude;
+      if (officeLongitude !== undefined) updateData.officeLongitude = officeLongitude;
+      if (officeRadiusMeters !== undefined) updateData.officeRadiusMeters = Number(officeRadiusMeters);
+      if (commissionPerLead !== undefined) updateData.commissionPerLead = Number(commissionPerLead);
+      const updated = await storage.updateAgencyByCode(agencyCode, updateData);
+      res.json({ success: true, data: updated });
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // v9.4 — Attendance: Punch In
+  app.post("/api/attendance/punch-in", authMiddleware, roleMiddleware("TELE_CALLER", "TEAM_LEADER", "AGENCY_ADMIN"), async (req: AuthRequest, res: Response) => {
+    try {
+      const agencyCode = req.user!.agencyCode;
+      const userId = req.user!.id;
+      if (!agencyCode) return res.status(400).json({ success: false, message: "No agency" });
+      const { latitude, longitude } = req.body;
+      if (!latitude || !longitude) return res.status(400).json({ success: false, message: "GPS coordinates required" });
+      const today = new Date().toISOString().split("T")[0];
+      const existing = await storage.getTodayAttendance(userId, today);
+      if (existing) return res.status(400).json({ success: false, message: "Already punched in today" });
+      // Check office radius
+      const agency = await storage.getAgencyByCode(agencyCode);
+      if (agency?.officeLatitude && agency?.officeLongitude) {
+        const R = 6371000;
+        const lat1 = parseFloat(agency.officeLatitude) * Math.PI / 180;
+        const lat2 = parseFloat(latitude) * Math.PI / 180;
+        const dLat = lat2 - lat1;
+        const dLng = (parseFloat(longitude) - parseFloat(agency.officeLongitude)) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng/2) * Math.sin(dLng/2);
+        const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const allowedRadius = agency.officeRadiusMeters || 100;
+        if (distance > allowedRadius) {
+          return res.status(400).json({ success: false, message: `You are ${Math.round(distance)}m away from office. Must be within ${allowedRadius}m to punch in.` });
+        }
+      }
+      const record = await storage.punchIn({
+        agencyCode,
+        userId,
+        date: today,
+        punchInAt: new Date(),
+        punchInLat: String(latitude),
+        punchInLng: String(longitude),
+        status: "PRESENT",
+      });
+      res.json({ success: true, data: record });
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // v9.4 — Attendance: Punch Out
+  app.post("/api/attendance/punch-out", authMiddleware, roleMiddleware("TELE_CALLER", "TEAM_LEADER", "AGENCY_ADMIN"), async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const { latitude, longitude } = req.body;
+      const today = new Date().toISOString().split("T")[0];
+      const existing = await storage.getTodayAttendance(userId, today);
+      if (!existing) return res.status(400).json({ success: false, message: "No punch-in found for today" });
+      if (existing.punchOutAt) return res.status(400).json({ success: false, message: "Already punched out today" });
+      const updated = await storage.updateAttendance(existing.id, {
+        punchOutAt: new Date(),
+        punchOutLat: latitude ? String(latitude) : null,
+        punchOutLng: longitude ? String(longitude) : null,
+      });
+      res.json({ success: true, data: updated });
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // v9.4 — Attendance: Get today status
+  app.get("/api/attendance/today", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const today = new Date().toISOString().split("T")[0];
+      const record = await storage.getTodayAttendance(userId, today);
+      res.json({ success: true, data: record || null });
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // v9.4 — Attendance: Get attendance list (role-based)
+  app.get("/api/attendance", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const { role, id: userId, agencyCode } = req.user!;
+      if (!agencyCode) return res.status(400).json({ success: false, message: "No agency" });
+      const { date } = req.query;
+      let records;
+      if (role === "TELE_CALLER") {
+        records = await storage.getAttendanceByUser(userId, agencyCode);
+      } else {
+        records = await storage.getAttendanceByAgency(agencyCode, date as string);
+      }
+      // Attach user names
+      const agencyUsers = await storage.getUsersByAgency(agencyCode);
+      const userMap = Object.fromEntries(agencyUsers.map(u => [u.id, u.fullName]));
+      const enriched = records.map(r => ({ ...r, userName: userMap[r.userId] || "Unknown" }));
+      res.json({ success: true, data: enriched });
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // v9.4 — Commissions: Get commissions (role-based)
+  app.get("/api/commissions", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const { role, id: userId, agencyCode } = req.user!;
+      if (!agencyCode) return res.status(400).json({ success: false, message: "No agency" });
+      let records;
+      if (role === "TELE_CALLER") {
+        records = await storage.getCommissionsByUser(userId, agencyCode);
+      } else {
+        records = await storage.getCommissionsByAgency(agencyCode);
+      }
+      // Attach user names
+      const agencyUsers = await storage.getUsersByAgency(agencyCode);
+      const userMap = Object.fromEntries(agencyUsers.map(u => [u.id, u.fullName]));
+      const enriched = records.map(r => ({ ...r, userName: userMap[r.userId] || "Unknown" }));
+      res.json({ success: true, data: enriched });
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // v9.4 — Commissions: Mark as paid (Agency Admin only)
+  app.patch("/api/commissions/:id/paid", authMiddleware, roleMiddleware("AGENCY_ADMIN"), async (req: AuthRequest, res: Response) => {
+    try {
+      const updated = await storage.updateCommission(req.params.id, { paidStatus: "PAID", paidAt: new Date() });
+      res.json({ success: true, data: updated });
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  // v9.4 — Commissions: Get agency commission settings
+  app.get("/api/agency/commission-settings", authMiddleware, roleMiddleware("AGENCY_ADMIN"), async (req: AuthRequest, res: Response) => {
+    try {
+      const agencyCode = req.user!.agencyCode;
+      if (!agencyCode) return res.status(400).json({ success: false, message: "No agency" });
+      const agency = await storage.getAgencyByCode(agencyCode);
+      res.json({ success: true, data: {
+        commissionPerLead: agency?.commissionPerLead || 0,
+        officeLatitude: agency?.officeLatitude || null,
+        officeLongitude: agency?.officeLongitude || null,
+        officeRadiusMeters: agency?.officeRadiusMeters || 100,
+      }});
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
   app.post("/api/upgrade-requests", authMiddleware, roleMiddleware("AGENCY_ADMIN"), async (req: AuthRequest, res: Response) => {
     try {
       const agencyCode = req.user!.agencyCode;

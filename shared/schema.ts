@@ -28,6 +28,14 @@ export const agencies = pgTable("agencies", {
   // ── Business Profile ───────────────────────────────────────────
   businessProfile: text("business_profile"),   // Company description, target customers, focus area
   businessServices: text("business_services"), // Products/services sold e.g. "Motor, Health, Term Life"
+  // ── Add-on Credits ────────────────────────────────────────────
+  rcAddonCredits: integer("rc_addon_credits").notNull().default(0),
+  aiAddonCredits: integer("ai_addon_credits").notNull().default(0),
+  // ── v9.4 — Commission & Attendance ────────────────────────────
+  commissionPerLead: integer("commission_per_lead").notNull().default(0), // ₹ per CONVERTED lead
+  officeLatitude: text("office_latitude"),     // Office GPS latitude
+  officeLongitude: text("office_longitude"),   // Office GPS longitude
+  officeRadiusMeters: integer("office_radius_meters").notNull().default(100), // Allowed punch-in radius
   // ──────────────────────────────────────────────────────────────
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
@@ -128,6 +136,7 @@ export const services = pgTable("services", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   agencyCode: text("agency_code").notNull(),
   name: text("name").notNull(),
+  commissionAmount: integer("commission_amount").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("services_agency_idx").on(table.agencyCode),
@@ -222,6 +231,67 @@ export type SubscriptionStatus = typeof subscriptionStatusEnum[number];
 export type RcRecord = typeof rcRecords.$inferSelect;
 export const insertRcRecordSchema = createInsertSchema(rcRecords).omit({ id: true, createdAt: true });
 export type InsertRcRecord = z.infer<typeof insertRcRecordSchema>;
+
+export const addonPurchases = pgTable("addon_purchases", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  agencyCode: text("agency_code").notNull(),
+  packType: text("pack_type").notNull(),
+  packSize: integer("pack_size").notNull(),
+  amount: integer("amount").notNull(),
+  razorpayOrderId: text("razorpay_order_id"),
+  razorpayPaymentId: text("razorpay_payment_id"),
+  status: text("status").notNull().default("CREATED"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("addon_purchases_agency_idx").on(table.agencyCode),
+]);
+
+export type AddonPurchase = typeof addonPurchases.$inferSelect;
+export type InsertAddonPurchase = typeof addonPurchases.$inferInsert;
+
+export const attendance = pgTable("attendance", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  agencyCode: text("agency_code").notNull(),
+  userId: text("user_id").notNull(),
+  date: text("date").notNull(), // YYYY-MM-DD format
+  punchInAt: timestamp("punch_in_at"),
+  punchInLat: text("punch_in_lat"),
+  punchInLng: text("punch_in_lng"),
+  punchOutAt: timestamp("punch_out_at"),
+  punchOutLat: text("punch_out_lat"),
+  punchOutLng: text("punch_out_lng"),
+  status: text("status").notNull().default("PRESENT"), // PRESENT | HALF_DAY | ABSENT
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("attendance_agency_idx").on(table.agencyCode),
+  index("attendance_user_idx").on(table.userId),
+  index("attendance_date_idx").on(table.date),
+]);
+
+export const commissions = pgTable("commissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  agencyCode: text("agency_code").notNull(),
+  userId: text("user_id").notNull(),       // Telecaller who converted
+  leadId: text("lead_id").notNull(),       // Lead that was converted
+  amount: integer("amount").notNull(),     // Commission ₹ at time of conversion
+  paidStatus: text("paid_status").notNull().default("PENDING"), // PENDING | PAID
+  convertedAt: timestamp("converted_at").defaultNow(),
+  paidAt: timestamp("paid_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("commissions_agency_idx").on(table.agencyCode),
+  index("commissions_user_idx").on(table.userId),
+  index("commissions_lead_idx").on(table.leadId),
+  index("commissions_status_idx").on(table.paidStatus),
+]);
+
+export type Attendance = typeof attendance.$inferSelect;
+export type InsertAttendance = typeof attendance.$inferInsert;
+export type Commission = typeof commissions.$inferSelect;
+export type InsertCommission = typeof commissions.$inferInsert;
+
+export const insertAttendanceSchema = createInsertSchema(attendance).omit({ id: true, createdAt: true });
+export const insertCommissionSchema = createInsertSchema(commissions).omit({ id: true, createdAt: true });
 
 export const processingJobs = pgTable("processing_jobs", {
   id: text("id").primaryKey(),

@@ -13,7 +13,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import {
-  LayoutDashboard, Users, Building2, Phone,
+  LayoutDashboard, Users, Building2, Phone, ClipboardCheck, IndianRupee,
   BarChart3, FileText, Brain, LogOut, ChevronDown,
   KeyRound, UserCheck, Download, Briefcase, ArrowUpCircle, Car, Receipt,
 } from "lucide-react";
@@ -152,6 +152,8 @@ function getNavItems(role: string) {
     items.push({ title: "RC Lookup", url: "/rc-lookup", icon: Car });
     items.push({ title: "AI Tools", url: "/ai-tools", icon: Brain });
     items.push({ title: "Business Profile", url: "/agency-profile", icon: Building2 });
+    items.push({ title: "Attendance", url: "/attendance", icon: ClipboardCheck });
+    items.push({ title: "Commission", url: "/commission", icon: IndianRupee });
   }
 
   if (role === "TEAM_LEADER") {
@@ -162,12 +164,15 @@ function getNavItems(role: string) {
     items.push({ title: "Audit Logs", url: "/audit-logs", icon: FileText });
     items.push({ title: "RC Lookup", url: "/rc-lookup", icon: Car });
     items.push({ title: "AI Tools", url: "/ai-tools", icon: Brain });
+    items.push({ title: "Attendance", url: "/attendance", icon: ClipboardCheck });
+    items.push({ title: "Commission", url: "/commission", icon: IndianRupee });
   }
-
   if (role === "TELE_CALLER") {
     items.push({ title: "Leads", url: "/leads", icon: Phone });
     items.push({ title: "My Performance", url: "/performance", icon: BarChart3 });
     items.push({ title: "AI Tools", url: "/ai-tools", icon: Brain });
+    items.push({ title: "Attendance", url: "/attendance", icon: ClipboardCheck });
+    items.push({ title: "Commission", url: "/commission", icon: IndianRupee });
   }
 
   return items;
