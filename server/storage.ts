@@ -678,6 +678,62 @@ export class DatabaseStorage implements IStorage {
   async deleteJob(id: string): Promise<void> {
     await db.delete(processingJobs).where(eq(processingJobs.id, id));
   }
+  
+  async punchIn(data: any): Promise<any> {
+    const [created] = await db.insert(attendance).values(data).returning();
+    return created;
+  }
+  async getTodayAttendance(userId: string, date: string): Promise<any> {
+    const [record] = await db.select().from(attendance)
+      .where(and(eq(attendance.userId, userId), eq(attendance.date, date)));
+    return record;
+  }
+  async getAttendanceByUser(userId: string, agencyCode: string): Promise<any[]> {
+    return db.select().from(attendance)
+      .where(and(eq(attendance.userId, userId), eq(attendance.agencyCode, agencyCode)))
+      .orderBy(desc(attendance.date));
+  }
+  async getAttendanceByAgency(agencyCode: string, date?: string): Promise<any[]> {
+    if (date) {
+      return db.select().from(attendance)
+        .where(and(eq(attendance.agencyCode, agencyCode), eq(attendance.date, date)))
+        .orderBy(desc(attendance.date));
+    }
+    return db.select().from(attendance)
+      .where(eq(attendance.agencyCode, agencyCode))
+      .orderBy(desc(attendance.date));
+  }
+  async updateAttendance(id: string, data: any): Promise<any> {
+    const [updated] = await db.update(attendance).set(data).where(eq(attendance.id, id)).returning();
+    return updated;
+  }
+  async createCommission(data: any): Promise<any> {
+    const [created] = await db.insert(commissions).values(data).returning();
+    return created;
+  }
+  async getCommissionsByUser(userId: string, agencyCode: string): Promise<any[]> {
+    return db.select().from(commissions)
+      .where(and(eq(commissions.userId, userId), eq(commissions.agencyCode, agencyCode)))
+      .orderBy(desc(commissions.convertedAt));
+  }
+  async getCommissionsByAgency(agencyCode: string): Promise<any[]> {
+    return db.select().from(commissions)
+      .where(eq(commissions.agencyCode, agencyCode))
+      .orderBy(desc(commissions.convertedAt));
+  }
+  async updateCommission(id: string, data: any): Promise<any> {
+    const [updated] = await db.update(commissions).set(data).where(eq(commissions.id, id)).returning();
+    return updated;
+  }
+  async updateService(id: string, data: any): Promise<any> {
+    const [updated] = await db.update(services).set(data).where(eq(services.id, id)).returning();
+    return updated;
+  }
+  async getServiceByName(agencyCode: string, name: string): Promise<any> {
+    const [service] = await db.select().from(services)
+      .where(and(eq(services.agencyCode, agencyCode), eq(services.name, name)));
+    return service;
+  }
 }
 
 export const storage = new DatabaseStorage();
