@@ -1010,7 +1010,13 @@ export async function registerRoutes(
       // Attach user names
       const agencyUsers = await storage.getUsersByAgency(agencyCode);
       const userMap = Object.fromEntries(agencyUsers.map(u => [u.id, u.fullName]));
-      const enriched = records.map(r => ({ ...r, userName: userMap[r.userId] || "Unknown" }));
+      let enriched = records.map(r => ({ ...r, userName: userMap[r.userId] || "Unknown" }));
+      if (role === "TEAM_LEADER") {
+        const myTelecallers = await storage.getTelecallersByTeamLeader(userId);
+        const myTcIds = new Set(myTelecallers.map(u => u.id));
+        myTcIds.add(userId);
+        enriched = enriched.filter(r => myTcIds.has(r.userId));
+      }
       res.json({ success: true, data: enriched });
     } catch (error: any) {
       console.error(error);

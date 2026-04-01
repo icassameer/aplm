@@ -272,7 +272,7 @@ export class DatabaseStorage implements IStorage {
     return lead;
   }
 
-  async getLeadsByAgency(agencyCode: string, page: number = 1, limit: number = 20, status?: string, assignmentFilter?: string, search?: string, assignedToFilter?: string): Promise<{ leads: Lead[]; total: number }> {
+  async getLeadsByAgency(agencyCode: string, page: number = 1, limit: number = 20, status?: string, assignmentFilter?: string, search?: string, assignedToFilter?: string, teamLeaderIdFilter?: string): Promise<{ leads: Lead[]; total: number }> {
     const offset = (page - 1) * limit;
     const conditions = [eq(leads.agencyCode, agencyCode)];
     if (status && status !== "ALL") conditions.push(eq(leads.status, status));
@@ -301,12 +301,6 @@ export class DatabaseStorage implements IStorage {
     if (search && search.trim()) {
       const term = `%${search.trim()}%`;
       conditions.push(or(ilike(leads.name, term), ilike(leads.phone, term), ilike(leads.email, term))!);
-    }
-    if (assignedToFilter && assignedToFilter !== "ALL") {
-      conditions.push(eq(leads.assignedTo, assignedToFilter));
-    }
-    if (teamLeaderIdFilter) {
-      conditions.push(eq(leads.teamLeaderId, teamLeaderIdFilter));
     }
     const where = and(...conditions);
     const [totalResult] = await db.select({ count: count() }).from(leads).where(where);
@@ -747,15 +741,26 @@ export class DatabaseStorage implements IStorage {
     const userIds = [...new Set(rows.map((r: any) => r.userId))];
     if (userIds.length === 0) return rows;
     const userRows = await db.select().from(users).where(inArray(users.id, userIds));
-    const userMap: Record<string, string> = {};
-    userRows.forEach((u: any) => { userMap[u.id] = u.fullName; });
+    const userMap: Record<string, { name: string; teamLeaderId: string | null }> = {};
+    userRows.forEach((u: any) => { userMap[u.id] = { name: u.fullName, teamLeaderId: u.teamLeaderId || null }; });
+    // Fetch team leader names
+    const tlIds = [...new Set(userRows.map((u: any) => u.teamLeaderId).filter(Boolean))];
+    const tlMap: Record<string, string> = {};
+    if (tlIds.length > 0) {
+      const tlRows = await db.select().from(users).where(inArray(users.id, tlIds));
+      tlRows.forEach((u: any) => { tlMap[u.id] = u.fullName; });
+    }
     const convertedLeads = await db.select({ assignedTo: leads.assignedTo, cnt: count() })
       .from(leads)
       .where(and(eq(leads.agencyCode, agencyCode), eq(leads.status, "CONVERTED")))
       .groupBy(leads.assignedTo);
     const convertedMap: Record<string, number> = {};
     convertedLeads.forEach((r: any) => { if (r.assignedTo) convertedMap[r.assignedTo] = Number(r.cnt); });
-    return rows.map((r: any) => ({ ...r, telecallerName: userMap[r.userId] || "Unknown", totalConverted: convertedMap[r.userId] || 0 }));
+    return rows.map((r: any) => {
+      const tc = userMap[r.userId];
+      const tlName = tc?.teamLeaderId ? (tlMap[tc.teamLeaderId] || "—") : "—";
+      return { ...r, telecallerName: tc?.name || "Unknown", teamLeaderName: tlName, totalConverted: convertedMap[r.userId] || 0 };
+    });
   }
   async updateCommission(id: string, data: any): Promise<any> {
     const [updated] = await db.update(commissions).set(data).where(eq(commissions.id, id)).returning();

@@ -158,11 +158,11 @@ export default function CommissionPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              {role === "AGENCY_ADMIN" ? (() => {
+              {(role === "AGENCY_ADMIN" || role === "TEAM_LEADER") ? (() => {
                 const grouped: Record<string, { name: string; ids: string[]; pendingIds: string[]; total: number; pending: number; paid: number; commissionOn: number; totalConverted: number }> = {};
                 commissions.forEach((c: any) => {
                   const key = c.userId;
-                  if (!grouped[key]) grouped[key] = { name: c.userName || c.telecallerName || "Unknown", ids: [], pendingIds: [], total: 0, pending: 0, paid: 0, commissionOn: 0, totalConverted: c.totalConverted || 0 };
+                  if (!grouped[key]) grouped[key] = { name: c.userName || c.telecallerName || "Unknown", teamLeaderName: c.teamLeaderName || "—", ids: [], pendingIds: [], total: 0, pending: 0, paid: 0, commissionOn: 0, totalConverted: c.totalConverted || 0 };
                   grouped[key].ids.push(c.id);
                   grouped[key].total += c.amount || 0;
                   grouped[key].commissionOn += 1;
@@ -176,6 +176,7 @@ export default function CommissionPage() {
                     <thead>
                       <tr className="border-b bg-muted/30">
                         <th className="text-left p-3 font-medium text-muted-foreground">Telecaller</th>
+                        <th className="text-left p-3 font-medium text-muted-foreground">Team Leader</th>
                         <th className="text-center p-3 font-medium text-muted-foreground">Total Converted</th>
                         <th className="text-center p-3 font-medium text-muted-foreground">Commission On</th>
                         <th className="text-right p-3 font-medium text-muted-foreground">Total Earned</th>
@@ -188,6 +189,7 @@ export default function CommissionPage() {
                       {rows.map((r, i) => (
                         <tr key={i} className="border-b hover:bg-muted/20 transition-colors">
                           <td className="p-3 font-semibold">{r.name}</td>
+                          <td className="p-3 text-sm text-muted-foreground">{(r as any).teamLeaderName || "—"}</td>
                           <td className="p-3 text-center">
                             <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs px-2 py-0.5 rounded-full">
                               <TrendingUp className="w-3 h-3" />{r.totalConverted}
@@ -220,6 +222,7 @@ export default function CommissionPage() {
                     <tfoot>
                       <tr className="border-t-2 bg-muted/20">
                         <td className="p-3 font-bold text-xs uppercase text-muted-foreground">Total</td>
+                        <td></td>
                         <td className="p-3 text-center font-bold">{rows.reduce((a,r)=>a+r.totalConverted,0)}</td>
                         <td className="p-3 text-center font-bold">{rows.reduce((a,r)=>a+r.commissionOn,0)}</td>
                         <td className="p-3 text-right font-bold text-green-600">₹{rows.reduce((a,r)=>a+r.total,0).toLocaleString("en-IN")}</td>

@@ -647,7 +647,7 @@ export default function LeadsPage() {
         const grouped: Record<string, { name: string; total: number; pending: number; paid: number; converted: number }> = {};
         commissionsData.forEach((c: any) => {
           const key = c.userId;
-          if (!grouped[key]) grouped[key] = { name: c.telecallerName || "Unknown", total: 0, pending: 0, paid: 0, converted: 0, totalConverted: c.totalConverted || 0 };
+          if (!grouped[key]) grouped[key] = { name: c.telecallerName || "Unknown", teamLeaderName: c.teamLeaderName || "—", total: 0, pending: 0, paid: 0, converted: 0, totalConverted: c.totalConverted || 0 };
           grouped[key].total += c.amount;
           grouped[key].converted += 1;
           grouped[key].totalConverted = c.totalConverted || 0;
@@ -668,6 +668,7 @@ export default function LeadsPage() {
                   <thead>
                     <tr className="border-b text-muted-foreground text-xs">
                       <th className="text-left py-2 pr-4 font-medium">Telecaller</th>
+                      <th className="text-left py-2 pr-4 font-medium">Team Leader</th>
                       <th className="text-center py-2 pr-4 font-medium">Total Converted</th>
                       <th className="text-center py-2 pr-4 font-medium">Commission On</th>
                       <th className="text-right py-2 pr-4 font-medium">Total Earned</th>
@@ -679,6 +680,7 @@ export default function LeadsPage() {
                     {rows.map((r, i) => (
                       <tr key={i} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                         <td className="py-2 pr-4 font-medium">{r.name}</td>
+                        <td className="py-2 pr-4 text-sm text-muted-foreground">{(r as any).teamLeaderName || "—"}</td>
                         <td className="py-2 pr-4 text-center">
                           <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs px-2 py-0.5 rounded-full">
                             <TrendingUp className="w-3 h-3" />{r.totalConverted}
@@ -698,6 +700,7 @@ export default function LeadsPage() {
                   <tfoot>
                     <tr className="border-t-2">
                       <td className="py-2 pr-4 font-bold text-xs uppercase text-muted-foreground">Total</td>
+                      <td></td>
                       <td className="py-2 pr-4 text-center font-bold">{rows.reduce((a,r)=>a+r.totalConverted,0)}</td>
                       <td className="py-2 pr-4 text-center font-bold">{rows.reduce((a,r)=>a+r.converted,0)}</td>
                       <td className="py-2 pr-4 text-right font-bold">{rows.reduce((a,r)=>a+r.total,0).toLocaleString("en-IN", {style:"currency",currency:"INR",maximumFractionDigits:0})}</td>
