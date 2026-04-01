@@ -82,9 +82,9 @@ const RC_LOOKUP_LIMITS: Record<string, number> = {
   ENTERPRISE: 200, // 200 lookups per month
 };
 
-function generateToken(user: User): string {
+function generateToken(user: User & { sessionToken?: string | null }): string {
   return jwt.sign(
-    { id: user.id, username: user.username, role: user.role, agencyCode: user.agencyCode },
+    { id: user.id, username: user.username, role: user.role, agencyCode: user.agencyCode, sessionToken: user.sessionToken },
     JWT_SECRET,
     { expiresIn: "24h" }
   );
@@ -94,11 +94,16 @@ interface AuthRequest extends Request {
   user?: { id: string; username: string; role: string; agencyCode: string | null };
 }
 
-function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
+async function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
   const token = req.headers.authorization?.replace("Bearer ", "");
   if (!token) return res.status(401).json({ success: false, message: "Authentication required" });
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const dbUser = await storage.getUser(decoded.id);
+    if (!dbUser) return res.status(401).json({ success: false, message: "User not found" });
+    if (dbUser.sessionToken && decoded.sessionToken !== dbUser.sessionToken) {
+      return res.status(401).json({ success: false, message: "Session expired. Please login again." });
+    }
     req.user = decoded;
     next();
   } catch {
@@ -160,7 +165,9 @@ export async function registerRoutes(
         if (agency && !agency.isActive) return res.status(403).json({ success: false, message: "Agency is deactivated" });
       }
 
-      const token = generateToken(user);
+      const sessionToken = require("crypto").randomBytes(32).toString("hex");
+      await storage.updateSessionToken(user.id, sessionToken);
+      const token = generateToken({ ...user, sessionToken });
       const { password: _, ...safeUser } = user;
       res.json({ success: true, data: { token, user: safeUser } });
     } catch (error: any) {
@@ -574,7 +581,8 @@ export async function registerRoutes(
       const agencyCode = req.user!.agencyCode;
       if (!agencyCode) return res.status(400).json({ success: false, message: "No agency" });
       const assignment = req.query.assignment as string;
-      const result = await storage.getLeadsByAgency(agencyCode, page, limit, status, assignment, search);
+      const assignedToFilter = req.query.assignedTo as string | undefined;
+      const result = await storage.getLeadsByAgency(agencyCode, page, limit, status, assignment, search, assignedToFilter);
       res.json({ success: true, data: result });
     } catch (error: any) {
       console.error(error);
@@ -1149,19 +1157,79 @@ export async function registerRoutes(
       if (!agencyCode) return res.status(400).json({ success: false, message: "No agency" });
 
       const { leads: allLeads } = await storage.getLeadsByAgency(agencyCode, 1, 10000);
+      const allUsers = await storage.getUsersByAgency(agencyCode);
+      const userMap = new Map(allUsers.map(u => [u.id, u]));
       const wb = XLSX.utils.book_new();
-      const data = allLeads.map(l => ({
-        Name: l.name, Phone: l.phone, Email: l.email || "",
-        Source: l.source || "", Service: l.service || "", Status: l.status,
-        "Follow-Up Date": l.followUpDate ? new Date(l.followUpDate).toLocaleDateString() : "",
-        Remarks: l.remarks || "",
-        "Created At": l.createdAt ? new Date(l.createdAt).toLocaleDateString() : "",
-      }));
+      const data = allLeads.map(l => {
+        const telecaller = l.assignedTo ? userMap.get(l.assignedTo) : null;
+        const creator = l.createdBy ? userMap.get(l.createdBy) : null;
+        const teamLeader = creator?.role === "TEAM_LEADER" ? creator : null;
+        return {
+          Name: l.name, Phone: l.phone, Email: l.email || "",
+          Source: l.source || "", Service: l.service || "", Status: l.status,
+          "Assigned Telecaller": telecaller ? telecaller.fullName : "Unassigned",
+          "Team Leader": teamLeader ? teamLeader.fullName : "—",
+          "Follow-Up Date": l.followUpDate ? new Date(l.followUpDate).toLocaleDateString() : "",
+          Remarks: l.remarks || "",
+            "Created At": l.createdAt ? new Date(l.createdAt).toLocaleDateString() : "",
+        };
+      });
       const ws = XLSX.utils.json_to_sheet(data);
       XLSX.utils.book_append_sheet(wb, ws, "Leads");
       const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", "attachment; filename=lead_report.xlsx");
+      res.send(buf);
+    } catch (error: any) {
+      console.error(error);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/reports/leads/team-leader", authMiddleware, roleMiddleware("TEAM_LEADER"), async (req: AuthRequest, res: Response) => {
+    try {
+      const agencyCode = req.user!.agencyCode;
+      if (!agencyCode) return res.status(400).json({ success: false, message: "No agency" });
+
+      const telecallerIdFilter = req.query.telecallerId as string | undefined;
+      const { leads: allLeads } = await storage.getLeadsByAgency(agencyCode, 1, 10000);
+      const allUsers = await storage.getUsersByAgency(agencyCode);
+      const userMap = new Map(allUsers.map(u => [u.id, u]));
+
+      const filtered = telecallerIdFilter && telecallerIdFilter !== "ALL"
+        ? allLeads.filter(l => l.assignedTo === telecallerIdFilter)
+        : allLeads;
+
+      const telecallerName = telecallerIdFilter && telecallerIdFilter !== "ALL"
+        ? (userMap.get(telecallerIdFilter)?.fullName || "Telecaller")
+        : "All";
+
+      const wb = XLSX.utils.book_new();
+      const data = filtered.map(l => {
+        const telecaller = l.assignedTo ? userMap.get(l.assignedTo) : null;
+        const creator = l.createdBy ? userMap.get(l.createdBy) : null;
+        const teamLeader = creator?.role === "TEAM_LEADER" ? creator : null;
+        return {
+          Name: l.name,
+          Phone: l.phone,
+          Email: l.email || "",
+          Source: l.source || "",
+          Service: l.service || "",
+          Status: l.status,
+          "Assigned Telecaller": telecaller ? telecaller.fullName : "Unassigned",
+          "Team Leader": teamLeader ? teamLeader.fullName : "—",
+          "Follow-Up Date": l.followUpDate ? new Date(l.followUpDate).toLocaleDateString() : "",
+          Remarks: l.remarks || "",
+          "Created At": l.createdAt ? new Date(l.createdAt).toLocaleDateString() : "",
+        };
+      });
+
+      const ws = XLSX.utils.json_to_sheet(data);
+      XLSX.utils.book_append_sheet(wb, ws, "Leads");
+      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      const filename = `leads_${telecallerName.replace(/\s+/g, "_")}.xlsx`;
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
       res.send(buf);
     } catch (error: any) {
       console.error(error);

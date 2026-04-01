@@ -28,6 +28,7 @@ export interface IStorage {
   getPendingUsersByAgency(agencyCode: string): Promise<User[]>;
   getAllPendingUsers(): Promise<User[]>;
   updateUser(id: string, data: Partial<User>): Promise<User | undefined>;
+  updateSessionToken(id: string, token: string | null): Promise<void>;
   deleteUser(id: string): Promise<void>;
   countUsersByAgency(agencyCode: string): Promise<number>;
 
@@ -44,7 +45,7 @@ export interface IStorage {
 
   createLead(lead: InsertLead): Promise<Lead>;
   getLead(id: string): Promise<Lead | undefined>;
-  getLeadsByAgency(agencyCode: string, page: number, limit: number, status?: string, assignmentFilter?: string, search?: string): Promise<{ leads: Lead[]; total: number }>;
+  getLeadsByAgency(agencyCode: string, page: number, limit: number, status?: string, assignmentFilter?: string, search?: string, assignedToFilter?: string): Promise<{ leads: Lead[]; total: number }>;
   getLeadsByAssignee(assignedTo: string, page: number, limit: number, status?: string, search?: string): Promise<{ leads: Lead[]; total: number }>;
   updateLead(id: string, data: Partial<Lead>): Promise<Lead | undefined>;
   deleteLead(id: string): Promise<void>;
@@ -167,6 +168,10 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async updateSessionToken(id: string, token: string | null): Promise<void> {
+    await db.update(users).set({ sessionToken: token }).where(eq(users.id, id));
+  }
+
   async deleteUser(id: string): Promise<void> {
     await db.transaction(async (tx) => {
       await tx.delete(auditLogs).where(eq(auditLogs.userId, id));
@@ -260,7 +265,7 @@ export class DatabaseStorage implements IStorage {
     return lead;
   }
 
-  async getLeadsByAgency(agencyCode: string, page: number = 1, limit: number = 20, status?: string, assignmentFilter?: string, search?: string): Promise<{ leads: Lead[]; total: number }> {
+  async getLeadsByAgency(agencyCode: string, page: number = 1, limit: number = 20, status?: string, assignmentFilter?: string, search?: string, assignedToFilter?: string): Promise<{ leads: Lead[]; total: number }> {
     const offset = (page - 1) * limit;
     const conditions = [eq(leads.agencyCode, agencyCode)];
     if (status && status !== "ALL") conditions.push(eq(leads.status, status));
@@ -269,6 +274,9 @@ export class DatabaseStorage implements IStorage {
     if (search && search.trim()) {
       const term = `%${search.trim()}%`;
       conditions.push(or(ilike(leads.name, term), ilike(leads.phone, term), ilike(leads.email, term))!);
+    }
+    if (assignedToFilter && assignedToFilter !== "ALL") {
+      conditions.push(eq(leads.assignedTo, assignedToFilter));
     }
     const where = and(...conditions);
     const [totalResult] = await db.select({ count: count() }).from(leads).where(where);
@@ -283,6 +291,9 @@ export class DatabaseStorage implements IStorage {
     if (search && search.trim()) {
       const term = `%${search.trim()}%`;
       conditions.push(or(ilike(leads.name, term), ilike(leads.phone, term), ilike(leads.email, term))!);
+    }
+    if (assignedToFilter && assignedToFilter !== "ALL") {
+      conditions.push(eq(leads.assignedTo, assignedToFilter));
     }
     const where = and(...conditions);
     const [totalResult] = await db.select({ count: count() }).from(leads).where(where);

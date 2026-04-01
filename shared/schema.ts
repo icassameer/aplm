@@ -55,6 +55,7 @@ export const users = pgTable("users", {
   agencyCode: text("agency_code"),
   isActive: boolean("is_active").notNull().default(true),
   status: text("status").notNull().default("ACTIVE"),
+  sessionToken: text("session_token"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("users_agency_idx").on(table.agencyCode),

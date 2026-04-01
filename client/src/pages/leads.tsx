@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import {
+import { Users,
   Phone, Plus, ChevronLeft, ChevronRight, Filter, Search,
   UserCheck, Clock, CheckCircle2, XCircle, AlertCircle,
   Upload, Download, Briefcase, Check, MessageCircle, TrendingUp, IndianRupee,
@@ -41,6 +41,8 @@ export default function LeadsPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState(user?.role === "TELE_CALLER" ? "NEW" : "ALL");
   const [assignmentFilter, setAssignmentFilter] = useState(user?.role === "TEAM_LEADER" ? "UNASSIGNED" : "ALL");
+  const [telecallerFilter, setTelecallerFilter] = useState("ALL");
+  const [exportingTL, setExportingTL] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [aiRemarkLoading, setAiRemarkLoading] = useState(false);
@@ -79,8 +81,8 @@ export default function LeadsPage() {
   const isAgencyAdmin = user?.role === "AGENCY_ADMIN";
 
   const { data: leadsData, isLoading } = useQuery({
-    queryKey: ["/api/leads", page, statusFilter, assignmentFilter, searchDebounced],
-    queryFn: () => apiFetch(`/api/leads?page=${page}&limit=${limit}${statusFilter !== "ALL" ? `&status=${statusFilter}` : ""}${assignmentFilter !== "ALL" ? `&assignment=${assignmentFilter}` : ""}${searchDebounced ? `&search=${encodeURIComponent(searchDebounced)}` : ""}`),
+    queryKey: ["/api/leads", page, statusFilter, assignmentFilter, telecallerFilter, searchDebounced],
+    queryFn: () => apiFetch(`/api/leads?page=${page}&limit=${limit}${statusFilter !== "ALL" ? `&status=${statusFilter}` : ""}${assignmentFilter !== "ALL" ? `&assignment=${assignmentFilter}` : ""}${telecallerFilter !== "ALL" ? `&assignedTo=${telecallerFilter}` : ""}${searchDebounced ? `&search=${encodeURIComponent(searchDebounced)}` : ""}`),
     enabled: !isAgencyAdmin,
   });
 
@@ -313,6 +315,21 @@ export default function LeadsPage() {
                 <SelectItem value="ALL">All Leads</SelectItem>
                 <SelectItem value="UNASSIGNED">Unassigned</SelectItem>
                 <SelectItem value="ASSIGNED">Assigned</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+
+          {user?.role === "TEAM_LEADER" && (
+            <Select value={telecallerFilter} onValueChange={(v) => { setTelecallerFilter(v); setPage(1); }}>
+              <SelectTrigger className="w-44" data-testid="select-telecaller-filter">
+                <Users className="w-3 h-3 mr-2" />
+                <SelectValue placeholder="All Telecallers" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Telecallers</SelectItem>
+                {telecallers.map((tc: any) => (
+                  <SelectItem key={tc.id} value={tc.id}>{tc.fullName}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           )}
