@@ -427,9 +427,10 @@ export async function registerRoutes(
       }
 
       const hashedPassword = await bcrypt.hash(password, 10);
+      const teamLeaderId = role === "TELE_CALLER" ? (req.body.teamLeaderId || null) : null;
       const user = await storage.createUser({
         username, password: hashedPassword, fullName, email, mobile: mobile || null,
-        role, agencyCode, isActive: true, status: "ACTIVE"
+        role, agencyCode, isActive: true, status: "ACTIVE", teamLeaderId,
       });
       const { password: _, ...safeUser } = user;
 
@@ -464,7 +465,7 @@ export async function registerRoutes(
       const agencyCode = req.user!.agencyCode;
       if (!agencyCode) return res.status(400).json({ success: false, message: "No agency code" });
       if (req.user!.role === "TEAM_LEADER") {
-        const userList = await storage.getTelecallersByAgency(agencyCode);
+        const userList = await storage.getTelecallersByTeamLeader(req.user!.id);
         const safeUsers = userList.map(({ password, ...rest }) => rest);
         return res.json({ success: true, data: safeUsers });
       }
@@ -582,7 +583,8 @@ export async function registerRoutes(
       if (!agencyCode) return res.status(400).json({ success: false, message: "No agency" });
       const assignment = req.query.assignment as string;
       const assignedToFilter = req.query.assignedTo as string | undefined;
-      const result = await storage.getLeadsByAgency(agencyCode, page, limit, status, assignment, search, assignedToFilter);
+      const teamLeaderIdFilter = req.user!.role === "TEAM_LEADER" ? req.user!.id : undefined;
+      const result = await storage.getLeadsByAgency(agencyCode, page, limit, status, assignment, search, assignedToFilter, teamLeaderIdFilter);
       res.json({ success: true, data: result });
     } catch (error: any) {
       console.error(error);
@@ -605,6 +607,9 @@ export async function registerRoutes(
 
       if (req.body.assignedTo !== undefined && req.user!.role !== "TEAM_LEADER") {
         return res.status(403).json({ success: false, message: "Only Team Leaders can assign leads" });
+      }
+      if (req.body.assignedTo !== undefined && req.user!.role === "TEAM_LEADER") {
+        req.body.teamLeaderId = req.user!.id;
       }
 
       if (req.body.status === "FOLLOW_UP" && !req.body.followUpDate) {
@@ -693,7 +698,7 @@ export async function registerRoutes(
       for (const leadId of leadIds) {
         const lead = await storage.getLead(leadId);
         if (lead && lead.agencyCode === req.user!.agencyCode) {
-          await storage.updateLead(leadId, { assignedTo, service: service || lead.service });
+          await storage.updateLead(leadId, { assignedTo, service: service || lead.service, teamLeaderId: req.user!.id });
           await storage.createAuditLog({
             agencyCode: lead.agencyCode,
             leadId: lead.id,

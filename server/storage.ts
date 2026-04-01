@@ -23,6 +23,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   getUsersByAgency(agencyCode: string): Promise<User[]>;
   getTelecallersByAgency(agencyCode: string): Promise<User[]>;
+  getTelecallersByTeamLeader(teamLeaderId: string): Promise<User[]>;
   getAllUsers(): Promise<User[]>;
   getUsersByAgencyFilter(agencyCode?: string): Promise<User[]>;
   getPendingUsersByAgency(agencyCode: string): Promise<User[]>;
@@ -45,7 +46,7 @@ export interface IStorage {
 
   createLead(lead: InsertLead): Promise<Lead>;
   getLead(id: string): Promise<Lead | undefined>;
-  getLeadsByAgency(agencyCode: string, page: number, limit: number, status?: string, assignmentFilter?: string, search?: string, assignedToFilter?: string): Promise<{ leads: Lead[]; total: number }>;
+  getLeadsByAgency(agencyCode: string, page: number, limit: number, status?: string, assignmentFilter?: string, search?: string, assignedToFilter?: string, teamLeaderIdFilter?: string): Promise<{ leads: Lead[]; total: number }>;
   getLeadsByAssignee(assignedTo: string, page: number, limit: number, status?: string, search?: string): Promise<{ leads: Lead[]; total: number }>;
   updateLead(id: string, data: Partial<Lead>): Promise<Lead | undefined>;
   deleteLead(id: string): Promise<void>;
@@ -139,6 +140,12 @@ export class DatabaseStorage implements IStorage {
   async getTelecallersByAgency(agencyCode: string): Promise<User[]> {
     return db.select().from(users).where(
       and(eq(users.agencyCode, agencyCode), eq(users.role, "TELE_CALLER"))
+    ).orderBy(desc(users.createdAt));
+  }
+
+  async getTelecallersByTeamLeader(teamLeaderId: string): Promise<User[]> {
+    return db.select().from(users).where(
+      and(eq(users.teamLeaderId, teamLeaderId), eq(users.role, "TELE_CALLER"))
     ).orderBy(desc(users.createdAt));
   }
 
@@ -278,6 +285,9 @@ export class DatabaseStorage implements IStorage {
     if (assignedToFilter && assignedToFilter !== "ALL") {
       conditions.push(eq(leads.assignedTo, assignedToFilter));
     }
+    if (teamLeaderIdFilter) {
+      conditions.push(eq(leads.teamLeaderId, teamLeaderIdFilter));
+    }
     const where = and(...conditions);
     const [totalResult] = await db.select({ count: count() }).from(leads).where(where);
     const result = await db.select().from(leads).where(where).orderBy(status === "FOLLOW_UP" ? asc(leads.followUpDate) : desc(leads.createdAt)).limit(limit).offset(offset);
@@ -294,6 +304,9 @@ export class DatabaseStorage implements IStorage {
     }
     if (assignedToFilter && assignedToFilter !== "ALL") {
       conditions.push(eq(leads.assignedTo, assignedToFilter));
+    }
+    if (teamLeaderIdFilter) {
+      conditions.push(eq(leads.teamLeaderId, teamLeaderIdFilter));
     }
     const where = and(...conditions);
     const [totalResult] = await db.select({ count: count() }).from(leads).where(where);

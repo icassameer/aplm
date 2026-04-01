@@ -56,6 +56,7 @@ export const users = pgTable("users", {
   isActive: boolean("is_active").notNull().default(true),
   status: text("status").notNull().default("ACTIVE"),
   sessionToken: text("session_token"),
+  teamLeaderId: text("team_leader_id"),  // Only set for TELE_CALLER
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("users_agency_idx").on(table.agencyCode),
@@ -77,6 +78,7 @@ export const leads = pgTable("leads", {
   firstContactedAt: timestamp("first_contacted_at"),
   remarks: text("remarks"),
   createdBy: text("created_by"),
+  teamLeaderId: text("team_leader_id"),  // Set when TL assigns lead
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
@@ -86,6 +88,7 @@ export const leads = pgTable("leads", {
   index("leads_assigned_idx").on(table.assignedTo),
   index("leads_followup_idx").on(table.followUpDate),
   index("leads_service_idx").on(table.service),
+  index("leads_tl_idx").on(table.teamLeaderId),
 ]);
 
 export const auditLogs = pgTable("audit_logs", {
@@ -127,6 +130,7 @@ export const meetings = pgTable("meetings", {
   sentiment: text("sentiment"),
   language: text("language"),
   createdBy: text("created_by"),
+  teamLeaderId: text("team_leader_id"),  // Set when TL assigns lead
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("meetings_agency_idx").on(table.agencyCode),
@@ -181,6 +185,7 @@ export const payments = pgTable("payments", {
   razorpaySignature: text("razorpay_signature"),
   status: text("status").notNull().default("PENDING"),
   createdBy: text("created_by"),
+  teamLeaderId: text("team_leader_id"),  // Set when TL assigns lead
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
@@ -313,6 +318,7 @@ export const rcLookups = pgTable("rc_lookups", {
   result: text("result"),
   status: text("status").notNull().default("SUCCESS"),
   createdBy: text("created_by"),
+  teamLeaderId: text("team_leader_id"),  // Set when TL assigns lead
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("rc_lookups_agency_idx").on(table.agencyCode),

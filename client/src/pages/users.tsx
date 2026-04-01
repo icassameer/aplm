@@ -13,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Users, Plus, Mail, Shield, KeyRound, Phone, Trash2 } from "lucide-react";
+import { Users, Plus, Mail, Shield, KeyRound, Phone, Trash2, Pencil } from "lucide-react";
 
 const roleLabels: Record<string, string> = {
   MASTER_ADMIN: "Master Admin",
@@ -36,18 +36,27 @@ export default function UsersPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const [editTLOpen, setEditTLOpen] = useState(false);
+  const [editTLUser, setEditTLUser] = useState<any>(null);
+  const [editTLValue, setEditTLValue] = useState("");
   const [resetUser, setResetUser] = useState<any>(null);
   const [newPassword, setNewPassword] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const [agencyFilter, setAgencyFilter] = useState("ALL");
   const [form, setForm] = useState({
-    username: "", password: "", fullName: "", email: "", mobile: "", role: "TELE_CALLER"
+    username: "", password: "", fullName: "", email: "", mobile: "", role: "TELE_CALLER", teamLeaderId: ""
   });
 
   const { data: agencies } = useQuery({
     queryKey: ["/api/agencies"],
     queryFn: () => apiFetch("/api/agencies"),
     enabled: user?.role === "MASTER_ADMIN",
+  });
+
+  const { data: teamLeaders } = useQuery({
+    queryKey: ["/api/users/team-leaders"],
+    queryFn: () => apiFetch("/api/users").then((list: any[]) => list.filter((u: any) => u.role === "TEAM_LEADER")),
+    enabled: user?.role === "AGENCY_ADMIN",
   });
 
   const { data: userList, isLoading } = useQuery({
@@ -63,8 +72,21 @@ export default function UsersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       setOpen(false);
-      setForm({ username: "", password: "", fullName: "", email: "", mobile: "", role: "TELE_CALLER" });
+      setForm({ username: "", password: "", fullName: "", email: "", mobile: "", role: "TELE_CALLER", teamLeaderId: "" });
       toast({ title: "User created successfully" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const editTLMutation = useMutation({
+    mutationFn: ({ id, teamLeaderId }: { id: string; teamLeaderId: string }) =>
+      apiFetch(`/api/users/${id}`, { method: "PATCH", body: JSON.stringify({ teamLeaderId: teamLeaderId || null }) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setEditTLOpen(false);
+      setEditTLUser(null);
+      setEditTLValue("");
+      toast({ title: "Team Leader updated" });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
@@ -200,6 +222,21 @@ export default function UsersPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                {user?.role === "AGENCY_ADMIN" && form.role === "TELE_CALLER" && (
+                  <div className="space-y-2">
+                    <Label>Assign to Team Leader</Label>
+                    <Select value={form.teamLeaderId} onValueChange={(v) => setForm({ ...form, teamLeaderId: v })}>
+                      <SelectTrigger data-testid="select-team-leader">
+                        <SelectValue placeholder="Select Team Leader" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(teamLeaders || []).map((tl: any) => (
+                          <SelectItem key={tl.id} value={tl.id}>{tl.fullName}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-user">
                   {createMutation.isPending ? "Creating..." : "Add Member"}
                 </Button>
@@ -236,6 +273,11 @@ export default function UsersPage() {
                         <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{u.mobile}</span>
                       )}
                       {u.agencyCode && <span className="text-[10px]">{u.agencyCode}</span>}
+                      {u.role === "TELE_CALLER" && u.teamLeaderId && (
+                        <span className="text-[10px] text-blue-500">
+                          TL: {(teamLeaders || []).find((tl: any) => tl.id === u.teamLeaderId)?.fullName || "Assigned"}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -250,7 +292,17 @@ export default function UsersPage() {
                       <KeyRound className="w-4 h-4" />
                     </Button>
                   )}
-                  {(user?.role === "MASTER_ADMIN" || user?.role === "AGENCY_ADMIN") && u.role !== "MASTER_ADMIN" && u.role !== "AGENCY_ADMIN" && (
+                  {user?.role === "AGENCY_ADMIN" && u.role === "TELE_CALLER" && (
+                    <Button
+                      variant="ghost" size="icon"
+                      onClick={() => { setEditTLUser(u); setEditTLValue(u.teamLeaderId || ""); setEditTLOpen(true); }}
+                      title="Assign Team Leader"
+                      data-testid={`button-edit-tl-${u.id}`}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {user?.role === "MASTER_ADMIN" && u.role !== "MASTER_ADMIN" && (
                     <Button
                       variant="destructive" size="sm"
                       onClick={() => { if (confirm(`Delete user "${u.fullName}"? This will also remove their assigned leads and data.`)) deleteUserMutation.mutate(u.id); }}
@@ -282,6 +334,37 @@ export default function UsersPage() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={editTLOpen} onOpenChange={setEditTLOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Team Leader: {editTLUser?.fullName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Team Leader</Label>
+              <Select value={editTLValue} onValueChange={setEditTLValue}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Team Leader" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— No Team Leader —</SelectItem>
+                  {(teamLeaders || []).map((tl: any) => (
+                    <SelectItem key={tl.id} value={tl.id}>{tl.fullName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              className="w-full"
+              onClick={() => editTLMutation.mutate({ id: editTLUser.id, teamLeaderId: editTLValue === "none" ? "" : editTLValue })}
+              disabled={editTLMutation.isPending}
+            >
+              {editTLMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={resetOpen} onOpenChange={setResetOpen}>
         <DialogContent>
