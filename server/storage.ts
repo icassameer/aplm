@@ -1,4 +1,4 @@
-import { eq, and, or, desc, asc, count, sql, ilike, isNull, isNotNull, lt, gt } from "drizzle-orm";
+import { eq, and, or, desc, asc, count, sql, ilike, isNull, isNotNull, lt, gt, inArray } from "drizzle-orm";
 import { db } from "./db";
 import {
   agencies, users, leads, auditLogs, meetings, services, upgradeRequests, rcRecords, processingJobs, payments,
@@ -717,9 +717,21 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(commissions.convertedAt));
   }
   async getCommissionsByAgency(agencyCode: string): Promise<any[]> {
-    return db.select().from(commissions)
+    const rows = await db.select().from(commissions)
       .where(eq(commissions.agencyCode, agencyCode))
       .orderBy(desc(commissions.convertedAt));
+    const userIds = [...new Set(rows.map((r: any) => r.userId))];
+    if (userIds.length === 0) return rows;
+    const userRows = await db.select().from(users).where(inArray(users.id, userIds));
+    const userMap: Record<string, string> = {};
+    userRows.forEach((u: any) => { userMap[u.id] = u.fullName; });
+    const convertedLeads = await db.select({ assignedTo: leads.assignedTo, cnt: count() })
+      .from(leads)
+      .where(and(eq(leads.agencyCode, agencyCode), eq(leads.status, "CONVERTED")))
+      .groupBy(leads.assignedTo);
+    const convertedMap: Record<string, number> = {};
+    convertedLeads.forEach((r: any) => { if (r.assignedTo) convertedMap[r.assignedTo] = Number(r.cnt); });
+    return rows.map((r: any) => ({ ...r, telecallerName: userMap[r.userId] || "Unknown", totalConverted: convertedMap[r.userId] || 0 }));
   }
   async updateCommission(id: string, data: any): Promise<any> {
     const [updated] = await db.update(commissions).set(data).where(eq(commissions.id, id)).returning();

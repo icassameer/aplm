@@ -427,10 +427,10 @@ export async function registerRoutes(
       const { password: _, ...safeUser } = user;
 
       // Send welcome email if email provided and agency exists
-      if (email && agencyCode && role === "AGENCY_ADMIN") {
+      if (email && agencyCode) {
         const agency = await storage.getAgencyByCode(agencyCode);
         if (agency) {
-          sendWelcomeEmail(email, fullName, username, agency.plan, agency.name).catch(err =>
+          sendWelcomeEmail(email, fullName, username, password, role, agency.plan, agency.name).catch(err =>
             console.error("Welcome email failed:", err.message)
           );
         }
@@ -2303,7 +2303,7 @@ ${businessContext4 ? `About this agency:\n${businessContext4}\n` : ""}${crmConte
       if (!to || !fullName || !username || !agencyCode) return res.status(400).json({ success: false, message: "Missing fields" });
       const agency = await storage.getAgencyByCode(agencyCode);
       if (!agency) return res.status(404).json({ success: false, message: "Agency not found" });
-      const sent = await sendWelcomeEmail(to, fullName, username, agency.plan, agency.name);
+      const sent = await sendWelcomeEmail(to, fullName, username, "", "AGENCY_ADMIN", agency.plan, agency.name);
       res.json({ success: sent, message: sent ? "Welcome email sent!" : "Failed to send email" });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message });
@@ -2459,7 +2459,9 @@ ${businessContext4 ? `About this agency:\n${businessContext4}\n` : ""}${crmConte
       const agency = await storage.getAgencyByCode(payment.agencyCode);
       if (agency) {
         const limits = PLAN_LIMITS[payment.plan] || {};
-        await storage.updateAgency(agency.id, { plan: payment.plan, ...limits, planAssignedAt: new Date() });
+        const newExpiry = new Date();
+        newExpiry.setDate(newExpiry.getDate() + 30);
+        await storage.updateAgency(agency.id, { plan: payment.plan, ...limits, planAssignedAt: new Date(), isActive: true, subscriptionExpiry: newExpiry });
         try {
           const agencyUsers = await storage.getUsersByAgency(payment.agencyCode);
           const adminUser = agencyUsers.find((u: any) => u.role === "AGENCY_ADMIN");
@@ -2478,6 +2480,76 @@ ${businessContext4 ? `About this agency:\n${businessContext4}\n` : ""}${crmConte
     } catch (error: any) {
       console.error("Verify error:", error);
       res.status(500).json({ success: false, message: "Payment verification failed" });
+    }
+  });
+
+  // POST /api/payments/website-order — create order from icaweb.in (public, no auth)
+  app.post("/api/payments/website-order", async (req: Request, res: Response) => {
+    try {
+      const { plan, agencyCode, name, email } = req.body;
+      const planUpper = (plan || "").toUpperCase();
+      if (!planUpper || !PLAN_PRICES[planUpper]) {
+        return res.status(400).json({ success: false, message: "Invalid plan" });
+      }
+      const amount = PLAN_PRICES[planUpper];
+      const receipt = `web_${agencyCode || "new"}_${Date.now()}`;
+      const order = await razorpay.orders.create({
+        amount,
+        currency: "INR",
+        receipt,
+        notes: { agencyCode: agencyCode || "", plan: planUpper, name: name || "", email: email || "" },
+      });
+      res.json({ success: true, data: { orderId: order.id, amount, currency: "INR", keyId: process.env.RAZORPAY_KEY_ID, plan: planUpper } });
+    } catch (err: any) {
+      console.error("website-order error:", err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // POST /api/payments/website-renew — auto-activate after icaweb.in payment
+  app.post("/api/payments/website-renew", async (req: Request, res: Response) => {
+    try {
+      const { agencyCode, plan, razorpay_payment_id, email, name } = req.body;
+      if (!agencyCode || !plan || !razorpay_payment_id) {
+        return res.status(400).json({ success: false, message: "Missing fields" });
+      }
+      const agency = await storage.getAgencyByCode(agencyCode.toUpperCase());
+      if (!agency) return res.status(404).json({ success: false, message: "Agency not found" });
+      const limits = PLAN_LIMITS[plan] || {};
+      const newExpiry = new Date();
+      newExpiry.setDate(newExpiry.getDate() + 30);
+      await storage.updateAgency(agency.id, {
+        plan, ...limits, planAssignedAt: new Date(),
+        isActive: true, subscriptionExpiry: newExpiry
+      });
+      // Record payment in payments table
+      const planAmounts: Record<string, number> = { BASIC: 250000, PRO: 550000, ENTERPRISE: 1200000 };
+      const planUpper = plan.toUpperCase();
+      await storage.createPayment({
+        agencyCode: agencyCode.toUpperCase(),
+        razorpayOrderId: razorpay_payment_id,
+        razorpayPaymentId: razorpay_payment_id,
+        amount: planAmounts[planUpper] || 0,
+        currency: "INR",
+        plan: planUpper,
+        status: "PAID",
+        createdBy: name || "website-renew",
+      });
+      // Send payment success email
+      try {
+        const agencyUsers = await storage.getUsersByAgency(agencyCode);
+        const adminUser = agencyUsers.find((u: any) => u.role === "AGENCY_ADMIN");
+        const toEmail = adminUser?.email || email;
+        const toName = adminUser?.fullName || name;
+        if (toEmail) {
+          await sendPaymentSuccessEmail(toEmail, toName, planUpper, planAmounts[planUpper] / 100 || 0, razorpay_payment_id);
+        }
+      } catch (emailErr) { console.error("Renewal email failed:", emailErr); }
+      console.log(`[website-renew] Agency ${agencyCode} renewed on ${plan} until ${newExpiry}`);
+      res.json({ success: true, message: "Agency renewed successfully" });
+    } catch (err: any) {
+      console.error("website-renew error:", err);
+      res.status(500).json({ success: false, message: err.message });
     }
   });
 

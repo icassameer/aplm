@@ -158,20 +158,90 @@ export default function CommissionPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
+              {role === "AGENCY_ADMIN" ? (() => {
+                const grouped: Record<string, { name: string; ids: string[]; pendingIds: string[]; total: number; pending: number; paid: number; commissionOn: number; totalConverted: number }> = {};
+                commissions.forEach((c: any) => {
+                  const key = c.userId;
+                  if (!grouped[key]) grouped[key] = { name: c.userName || c.telecallerName || "Unknown", ids: [], pendingIds: [], total: 0, pending: 0, paid: 0, commissionOn: 0, totalConverted: c.totalConverted || 0 };
+                  grouped[key].ids.push(c.id);
+                  grouped[key].total += c.amount || 0;
+                  grouped[key].commissionOn += 1;
+                  grouped[key].totalConverted = c.totalConverted || grouped[key].totalConverted;
+                  if (c.paidStatus === "PENDING") { grouped[key].pending += c.amount || 0; grouped[key].pendingIds.push(c.id); }
+                  else grouped[key].paid += c.amount || 0;
+                });
+                const rows = Object.values(grouped);
+                return (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/30">
+                        <th className="text-left p-3 font-medium text-muted-foreground">Telecaller</th>
+                        <th className="text-center p-3 font-medium text-muted-foreground">Total Converted</th>
+                        <th className="text-center p-3 font-medium text-muted-foreground">Commission On</th>
+                        <th className="text-right p-3 font-medium text-muted-foreground">Total Earned</th>
+                        <th className="text-right p-3 font-medium text-muted-foreground text-green-600">Paid</th>
+                        <th className="text-right p-3 font-medium text-muted-foreground text-amber-500">Pending</th>
+                        <th className="text-center p-3 font-medium text-muted-foreground">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((r, i) => (
+                        <tr key={i} className="border-b hover:bg-muted/20 transition-colors">
+                          <td className="p-3 font-semibold">{r.name}</td>
+                          <td className="p-3 text-center">
+                            <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs px-2 py-0.5 rounded-full">
+                              <TrendingUp className="w-3 h-3" />{r.totalConverted}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center">
+                            <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs px-2 py-0.5 rounded-full">
+                              <TrendingUp className="w-3 h-3" />{r.commissionOn}
+                            </span>
+                          </td>
+                          <td className="p-3 text-right font-bold text-green-600">₹{r.total.toLocaleString("en-IN")}</td>
+                          <td className="p-3 text-right text-green-600 font-medium">₹{r.paid.toLocaleString("en-IN")}</td>
+                          <td className="p-3 text-right text-amber-500 font-medium">₹{r.pending.toLocaleString("en-IN")}</td>
+                          <td className="p-3 text-center">
+                            {r.pendingIds.length > 0 ? (
+                              <Button size="sm" variant="outline" className="h-7 text-xs"
+                                disabled={markPaidMutation.isPending}
+                                onClick={() => { r.pendingIds.forEach(id => markPaidMutation.mutate(id)); }}>
+                                Mark All Paid
+                              </Button>
+                            ) : (
+                              <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 text-xs">
+                                <CheckCircle className="w-3 h-3 mr-1" />All Paid
+                              </Badge>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 bg-muted/20">
+                        <td className="p-3 font-bold text-xs uppercase text-muted-foreground">Total</td>
+                        <td className="p-3 text-center font-bold">{rows.reduce((a,r)=>a+r.totalConverted,0)}</td>
+                        <td className="p-3 text-center font-bold">{rows.reduce((a,r)=>a+r.commissionOn,0)}</td>
+                        <td className="p-3 text-right font-bold text-green-600">₹{rows.reduce((a,r)=>a+r.total,0).toLocaleString("en-IN")}</td>
+                        <td className="p-3 text-right font-bold text-green-600">₹{rows.reduce((a,r)=>a+r.paid,0).toLocaleString("en-IN")}</td>
+                        <td className="p-3 text-right font-bold text-amber-500">₹{rows.reduce((a,r)=>a+r.pending,0).toLocaleString("en-IN")}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                );
+              })() : (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/30">
-                    {role !== "TELE_CALLER" && <th className="text-left p-3 font-medium text-muted-foreground">Telecaller</th>}
                     <th className="text-left p-3 font-medium text-muted-foreground">Amount</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Converted On</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Status</th>
-                    {role === "AGENCY_ADMIN" && <th className="text-left p-3 font-medium text-muted-foreground">Action</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {commissions.map((c: any) => (
                     <tr key={c.id} className="border-b hover:bg-muted/20 transition-colors">
-                      {role !== "TELE_CALLER" && <td className="p-3 font-medium">{c.userName}</td>}
                       <td className="p-3 font-bold text-green-600">₹{c.amount?.toLocaleString("en-IN")}</td>
                       <td className="p-3 text-muted-foreground">{formatDate(c.convertedAt)}</td>
                       <td className="p-3">
@@ -185,21 +255,11 @@ export default function CommissionPage() {
                           </Badge>
                         )}
                       </td>
-                      {role === "AGENCY_ADMIN" && (
-                        <td className="p-3">
-                          {c.paidStatus === "PENDING" && (
-                            <Button size="sm" variant="outline" className="h-7 text-xs"
-                              onClick={() => markPaidMutation.mutate(c.id)}
-                              disabled={markPaidMutation.isPending}>
-                              Mark Paid
-                            </Button>
-                          )}
-                        </td>
-                      )}
                     </tr>
                   ))}
                 </tbody>
               </table>
+              )}
             </div>
           )}
         </CardContent>
