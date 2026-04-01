@@ -475,17 +475,17 @@ export class DatabaseStorage implements IStorage {
 
     // ── 4. Weighted score ───────────────────────────────────────────────────
     const rawScore =
-      (conversionQuality  * 0.35) +
-      (speedScore         * 0.25) +
+      (conversionQuality  * 0.50) +
+      (speedScore         * 0.15) +
       (followUpDiscipline * 0.20) +
-      (leadCoverage       * 0.15) +
+      (leadCoverage       * 0.10) +
       (closureScore       * 0.05);
 
     // ── 5. Confidence damping for new telecallers ───────────────────────────
     // < 5 leads = statistically unreliable → blend toward neutral baseline (40)
     // 0 leads → score=40  |  3 leads → 60% real + 40% neutral  |  5+ leads → full score
-    const confidence  = Math.min(1, total / 5);
-    const NEUTRAL     = 40;
+    const confidence  = Math.min(1, total / 20);
+    const NEUTRAL     = 25;
     const dampedScore = rawScore * confidence + NEUTRAL * (1 - confidence);
 
     const finalScore = Math.round(Math.max(0, Math.min(100, dampedScore)) * 100) / 100;
