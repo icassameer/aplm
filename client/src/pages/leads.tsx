@@ -413,7 +413,7 @@ export default function LeadsPage() {
                     Add Lead
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="overflow-y-auto max-h-[90vh]">
                   <DialogHeader>
                     <DialogTitle>Add New Lead</DialogTitle>
                   </DialogHeader>
