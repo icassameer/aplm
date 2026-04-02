@@ -1003,12 +1003,12 @@ export async function registerRoutes(
     try {
       const { role, id: userId, agencyCode } = req.user!;
       if (!agencyCode) return res.status(400).json({ success: false, message: "No agency" });
-      const { date } = req.query;
+      const { date, month } = req.query;
       let records;
       if (role === "TELE_CALLER") {
-        records = await storage.getAttendanceByUser(userId, agencyCode);
+        records = await storage.getAttendanceByUser(userId, agencyCode, month as string);
       } else {
-        records = await storage.getAttendanceByAgency(agencyCode, date as string);
+        records = await storage.getAttendanceByAgency(agencyCode, date as string, month as string);
       }
       // Attach user names
       const agencyUsers = await storage.getUsersByAgency(agencyCode);

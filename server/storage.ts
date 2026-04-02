@@ -706,19 +706,21 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(attendance.userId, userId), eq(attendance.date, date)));
     return record;
   }
-  async getAttendanceByUser(userId: string, agencyCode: string): Promise<any[]> {
-    return db.select().from(attendance)
-      .where(and(eq(attendance.userId, userId), eq(attendance.agencyCode, agencyCode)))
-      .orderBy(desc(attendance.date));
-  }
-  async getAttendanceByAgency(agencyCode: string, date?: string): Promise<any[]> {
-    if (date) {
-      return db.select().from(attendance)
-        .where(and(eq(attendance.agencyCode, agencyCode), eq(attendance.date, date)))
-        .orderBy(desc(attendance.date));
+  async getAttendanceByUser(userId: string, agencyCode: string, month?: string): Promise<any[]> {
+    const conditions: any[] = [eq(attendance.userId, userId), eq(attendance.agencyCode, agencyCode)];
+    if (month) {
+      conditions.push(sql`${attendance.date} LIKE ${month + '-%'}`);
     }
     return db.select().from(attendance)
-      .where(eq(attendance.agencyCode, agencyCode))
+      .where(and(...conditions))
+      .orderBy(desc(attendance.date));
+  }
+  async getAttendanceByAgency(agencyCode: string, date?: string, month?: string): Promise<any[]> {
+    const conditions: any[] = [eq(attendance.agencyCode, agencyCode)];
+    if (date) conditions.push(eq(attendance.date, date));
+    if (month) conditions.push(sql`${attendance.date} LIKE ${month + '-%'}`);
+    return db.select().from(attendance)
+      .where(and(...conditions))
       .orderBy(desc(attendance.date));
   }
   async updateAttendance(id: string, data: any): Promise<any> {
