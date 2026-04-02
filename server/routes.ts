@@ -816,6 +816,7 @@ export async function registerRoutes(
             service: (row.service || row.Service || null),
             agencyCode,
             createdBy: req.user!.id,
+            teamLeaderId: req.user!.role === "TEAM_LEADER" ? req.user!.id : (req.body.teamLeaderId || undefined),
             status: "NEW",
             assignedTo: null,
             followUpDate: null,

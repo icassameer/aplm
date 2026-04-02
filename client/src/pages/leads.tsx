@@ -58,8 +58,9 @@ export default function LeadsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
-    name: "", phone: "", email: "", source: "", remarks: "", service: ""
+    name: "", phone: "", email: "", source: "", remarks: "", service: "", teamLeaderId: ""
   });
+  const [uploadTeamLeaderId, setUploadTeamLeaderId] = useState("");
   const [editForm, setEditForm] = useState({
     status: "", remarks: "", followUpDate: "", service: ""
   });
@@ -111,13 +112,13 @@ export default function LeadsPage() {
   const createMutation = useMutation({
     mutationFn: () => apiFetch("/api/leads", {
       method: "POST",
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, teamLeaderId: form.teamLeaderId || undefined }),
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
       setCreateOpen(false);
-      setForm({ name: "", phone: "", email: "", source: "", remarks: "", service: "" });
+      setForm({ name: "", phone: "", email: "", source: "", remarks: "", service: "", teamLeaderId: "" });
       toast({ title: "Lead created" });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
@@ -182,6 +183,7 @@ export default function LeadsPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
+      if (uploadTeamLeaderId) formData.append("teamLeaderId", uploadTeamLeaderId);
       const res = await fetch("/api/leads/upload", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
@@ -197,6 +199,7 @@ export default function LeadsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
       setUploadOpen(false);
+      setUploadTeamLeaderId("");
     } catch (err: any) {
       toast({ title: "Upload Error", description: err.message, variant: "destructive" });
     } finally {
@@ -258,6 +261,7 @@ export default function LeadsPage() {
     return false;
   };
   const telecallers = teamUsers?.filter((u: any) => u.role === "TELE_CALLER") || [];
+  const teamLeaders = teamUsers?.filter((u: any) => u.role === "TEAM_LEADER") || [];
   const services = serviceList || [];
 
   if (isLoading || isStatsLoading) {
@@ -362,6 +366,19 @@ export default function LeadsPage() {
                       <Download className="w-4 h-4 mr-2" />
                       Download Template
                     </Button>
+                    {isAgencyAdmin && teamLeaders.length > 0 && (
+                      <div className="space-y-2">
+                        <Label>Assign to Team Leader <span className="text-red-500">*</span></Label>
+                        <Select value={uploadTeamLeaderId} onValueChange={setUploadTeamLeaderId}>
+                          <SelectTrigger><SelectValue placeholder="Select Team Leader first" /></SelectTrigger>
+                          <SelectContent>
+                            {teamLeaders.map((tl: any) => (
+                              <SelectItem key={tl.id} value={tl.id}>{tl.fullName || tl.username}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                     <div className="space-y-2">
                       <Label>Select File</Label>
                       <Input
@@ -373,8 +390,11 @@ export default function LeadsPage() {
                           const file = e.target.files?.[0];
                           if (file) handleFileUpload(file);
                         }}
-                        disabled={uploading}
+                        disabled={uploading || (isAgencyAdmin && !uploadTeamLeaderId)}
                       />
+                      {isAgencyAdmin && !uploadTeamLeaderId && (
+                        <p className="text-xs text-orange-500">Please select a Team Leader before uploading</p>
+                      )}
                     </div>
                     {uploading && (
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -442,7 +462,20 @@ export default function LeadsPage() {
                       <Label>Remarks</Label>
                       <Textarea data-testid="input-lead-remarks" value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} rows={2} />
                     </div>
-                    <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-lead">
+                    {isAgencyAdmin && teamLeaders.length > 0 && (
+                      <div className="space-y-2">
+                        <Label>Assign to Team Leader <span className="text-red-500">*</span></Label>
+                        <Select value={form.teamLeaderId} onValueChange={(v) => setForm({ ...form, teamLeaderId: v })}>
+                          <SelectTrigger><SelectValue placeholder="Select Team Leader" /></SelectTrigger>
+                          <SelectContent>
+                            {teamLeaders.map((tl: any) => (
+                              <SelectItem key={tl.id} value={tl.id}>{tl.fullName || tl.username}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    <Button type="submit" className="w-full" disabled={createMutation.isPending || (isAgencyAdmin && !form.teamLeaderId)} data-testid="button-submit-lead">
                       {createMutation.isPending ? "Creating..." : "Add Lead"}
                     </Button>
                   </form>
