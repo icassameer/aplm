@@ -56,6 +56,7 @@ export default function LeadsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchDebounced, setSearchDebounced] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
     name: "", phone: "", email: "", source: "", remarks: "", service: "", teamLeaderId: ""
@@ -78,6 +79,7 @@ export default function LeadsPage() {
     }, 400);
     return () => clearTimeout(timer);
   }, [searchTerm]);
+  useEffect(() => { if (searchInputRef.current && document.activeElement !== searchInputRef.current && searchTerm.length > 0) { searchInputRef.current.focus(); } }, [searchTerm]);
 
   const isAgencyAdmin = user?.role === "AGENCY_ADMIN";
 
@@ -85,6 +87,7 @@ export default function LeadsPage() {
     queryKey: ["/api/leads", page, statusFilter, assignmentFilter, telecallerFilter, searchDebounced],
     queryFn: () => apiFetch(`/api/leads?page=${page}&limit=${limit}${statusFilter !== "ALL" ? `&status=${statusFilter}` : ""}${assignmentFilter !== "ALL" ? `&assignment=${assignmentFilter}` : ""}${telecallerFilter !== "ALL" ? `&assignedTo=${telecallerFilter}` : ""}${searchDebounced ? `&search=${encodeURIComponent(searchDebounced)}` : ""}`),
     enabled: !isAgencyAdmin,
+    placeholderData: (prev: any) => prev,
   });
 
   const { data: leadStatsData, isLoading: isStatsLoading } = useQuery({
@@ -285,6 +288,7 @@ export default function LeadsPage() {
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
               <Input
+                ref={searchInputRef}
                 data-testid="input-lead-search"
                 placeholder="Search name, phone, email..."
                 value={searchTerm}
@@ -594,7 +598,7 @@ export default function LeadsPage() {
                             {lead.followUpDate && (
                               <span className="flex items-center gap-1">
                                 <Clock className="w-3 h-3" />
-                                Follow up: {new Date(lead.followUpDate).toLocaleDateString()}
+                                Follow up: {new Date(lead.followUpDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                               </span>
                             )}
                           </div>
