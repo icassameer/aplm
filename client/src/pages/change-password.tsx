@@ -14,6 +14,7 @@ export default function ChangePasswordPage() {
   const [loading, setLoading] = useState(false);
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,13 +89,18 @@ export default function ChangePasswordPage() {
             </div>
             <div className="space-y-2">
               <Label>Confirm New Password</Label>
-              <Input
-                type="password"
-                data-testid="input-confirm-password"
-                value={form.confirmPassword}
-                onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-                required
-              />
+              <div className="relative">
+                <Input
+                  type={showConfirm ? "text" : "password"}
+                  data-testid="input-confirm-password"
+                  value={form.confirmPassword}
+                  onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+                  required
+                />
+                <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0" onClick={() => setShowConfirm(!showConfirm)} tabIndex={-1}>
+                  {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </Button>
+              </div>
             </div>
             <Button type="submit" className="w-full" disabled={loading} data-testid="button-change-password">
               {loading ? "Changing..." : "Change Password"}

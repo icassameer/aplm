@@ -584,7 +584,7 @@ export default function LeadsPage() {
                             )}
                             <a
                               href={`https://wa.me/91${lead.phone.replace(/\D/g, "")}?text=${encodeURIComponent(
-                                `Hello ${lead.name},\n\nWe are reaching out regarding your enquiry${lead.service ? ` for *${lead.service}*` : ""}.\n\nWe would love to assist you. Please let us know a convenient time to connect.\n\nRegards,\nICA Team\n+91 9967969850`)}`}
+                                `Hello ${lead.name},\n\nWe are reaching out regarding your enquiry${lead.service ? ` for *${lead.service}*` : ""}.\n\nWe would love to assist you. Please let us know a convenient time to connect.\n\nRegards,\nAPLM Team\n+91 8830242124`)}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-1 text-green-600 hover:text-green-700 font-medium transition-colors bg-green-50 dark:bg-green-950 px-2 py-0.5 rounded-full"

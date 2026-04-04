@@ -13,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Users, Plus, Mail, Shield, KeyRound, Phone, Trash2, Pencil } from "lucide-react";
+import { Users, Plus, Mail, Shield, KeyRound, Phone, Trash2, Pencil, Eye, EyeOff } from "lucide-react";
 
 const roleLabels: Record<string, string> = {
   MASTER_ADMIN: "Master Admin",
@@ -41,6 +41,7 @@ export default function UsersPage() {
   const [editTLValue, setEditTLValue] = useState("");
   const [resetUser, setResetUser] = useState<any>(null);
   const [newPassword, setNewPassword] = useState("");
+  const [showResetPassword, setShowResetPassword] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [agencyFilter, setAgencyFilter] = useState("ALL");
   const [form, setForm] = useState({
@@ -374,14 +375,19 @@ export default function UsersPage() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>New Password</Label>
-              <Input
-                type="password"
-                data-testid="input-reset-password"
-                placeholder="Enter new password (min 6 chars)"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                minLength={6}
-              />
+              <div className="relative">
+                <Input
+                  type={showResetPassword ? "text" : "password"}
+                  data-testid="input-reset-password"
+                  placeholder="Enter new password (min 6 chars)"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  minLength={6}
+                />
+                <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0" onClick={() => setShowResetPassword(!showResetPassword)} tabIndex={-1}>
+                  {showResetPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </Button>
+              </div>
             </div>
             <Button
               className="w-full"
