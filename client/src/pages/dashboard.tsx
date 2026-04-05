@@ -179,13 +179,12 @@ function AgencyAdminDashboard({ data }: { data: any }) {
   const followUpRate = totalLeads > 0 ? ((stats.FOLLOW_UP || 0) / totalLeads * 100).toFixed(1) : "0";
 
   const pieData = Object.entries(stats)
-    .filter(([_, v]) => (v as number) > 0)
+    .filter(([key, v]) => (v as number) > 0 && key !== "CONTACTED")
     .map(([key, value]) => ({ name: STATUS_LABELS[key] || key, value: value as number, color: STATUS_COLORS[key] || "#888" }));
 
-  const inProgressCount = (stats.CONTACTED || 0) + (stats.FOLLOW_UP || 0) + (stats.CONVERTED || 0) + (stats.NOT_INTERESTED || 0);
   const barData = [
     { name: "New", count: stats.NEW || 0, fill: STATUS_COLORS["NEW"] || "#888" },
-    { name: "In Progress", count: inProgressCount, fill: STATUS_COLORS["CONTACTED"] || "#888" },
+    
     { name: "Follow Up", count: stats.FOLLOW_UP || 0, fill: STATUS_COLORS["FOLLOW_UP"] || "#888" },
     { name: "Converted", count: stats.CONVERTED || 0, fill: STATUS_COLORS["CONVERTED"] || "#888" },
     { name: "Not Interested", count: stats.NOT_INTERESTED || 0, fill: STATUS_COLORS["NOT_INTERESTED"] || "#888" },
@@ -377,12 +376,12 @@ function TeamLeaderDashboard({ data }: { data: any }) {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={Object.entries(stats).filter(([_, v]) => (v as number) > 0).map(([k, v]) => ({
+                    data={Object.entries(stats).filter(([key, v]) => (v as number) > 0 && key !== "CONTACTED").map(([k, v]) => ({
                       name: STATUS_LABELS[k] || k, value: v as number, color: STATUS_COLORS[k] || "#888"
                     }))}
                     cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value"
                   >
-                    {Object.entries(stats).filter(([_, v]) => (v as number) > 0).map(([k], i) => (
+                    {Object.entries(stats).filter(([key, v]) => (v as number) > 0 && key !== "CONTACTED").map(([k], i) => (
                       <Cell key={i} fill={STATUS_COLORS[k] || "#888"} />
                     ))}
                   </Pie>
@@ -474,12 +473,12 @@ function TelecallerDashboard({ data }: { data: any }) {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={Object.entries(stats).filter(([_, v]) => (v as number) > 0).map(([k, v]) => ({
+                    data={Object.entries(stats).filter(([key, v]) => (v as number) > 0 && key !== "CONTACTED").map(([k, v]) => ({
                       name: STATUS_LABELS[k] || k, value: v as number, color: STATUS_COLORS[k] || "#888"
                     }))}
                     cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value"
                   >
-                    {Object.entries(stats).filter(([_, v]) => (v as number) > 0).map(([k], i) => (
+                    {Object.entries(stats).filter(([key, v]) => (v as number) > 0 && key !== "CONTACTED").map(([k], i) => (
                       <Cell key={i} fill={STATUS_COLORS[k] || "#888"} />
                     ))}
                   </Pie>
@@ -488,7 +487,7 @@ function TelecallerDashboard({ data }: { data: any }) {
               </ResponsiveContainer>
             </div>
             <div className="flex flex-wrap gap-3 justify-center mt-2">
-              {Object.entries(stats).filter(([_, v]) => (v as number) > 0).map(([k, v]) => (
+              {Object.entries(stats).filter(([key, v]) => (v as number) > 0 && key !== "CONTACTED").map(([k, v]) => (
                 <div key={k} className="flex items-center gap-1.5 text-xs">
                   <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[k] }} />
                   <span className="text-muted-foreground">{STATUS_LABELS[k]}: {v as number}</span>
