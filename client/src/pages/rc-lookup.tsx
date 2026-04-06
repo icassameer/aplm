@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 export default function RCLookupPage() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const isMasterAdmin = user?.role === "MASTER_ADMIN";
   const isTeamLeader = user?.role === "TEAM_LEADER";
   const { apiFetch } = useApi();
@@ -44,7 +44,10 @@ export default function RCLookupPage() {
 
   const { data: savedRecords, isLoading: recordsLoading, isFetching: recordsFetching, error: recordsQueryError } = useQuery({
     queryKey: [recordsUrl],
-    queryFn: () => apiFetch(recordsUrl),
+    queryFn: async () => {
+      const res = await fetch(recordsUrl, { headers: { Authorization: `Bearer ${token}` } });
+      return res.json();
+    },
   });
 
   const agencyPlan = savedRecords?.meta?.plan;
@@ -72,10 +75,12 @@ const subscriptionLoaded = !isMasterAdmin ? (!recordsLoading && !recordsFetching
     setLoading(true);
     setResult(null);
     try {
-      const data = await apiFetch("/api/rc-lookup", {
+      const res = await fetch("/api/rc-lookup", {
         method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ rcNumber: rcNumber.trim().toUpperCase() }),
       });
+      const data = await res.json();
       if (data.success) {
         setResult(data.data);
         queryClient.invalidateQueries({ queryKey: ["/api/rc-records"] });
@@ -140,7 +145,11 @@ const subscriptionLoaded = !isMasterAdmin ? (!recordsLoading && !recordsFetching
   );
 
   const r = result;
-  const records = savedRecords?.data || [];
+  const records = (savedRecords?.data || []).sort((a: any, b: any) => {
+    const dateA = a.rcData?.insurance_details?.insurance_valid_upto ? new Date(a.rcData.insurance_details.insurance_valid_upto).getTime() : Infinity;
+    const dateB = b.rcData?.insurance_details?.insurance_valid_upto ? new Date(b.rcData.insurance_details.insurance_valid_upto).getTime() : Infinity;
+    return dateA - dateB;
+  });
 
   if (isMasterAdmin) {
     return (
