@@ -9,6 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Car, Search, User, Shield, FileText,
@@ -29,6 +32,9 @@ export default function RCLookupPage() {
   const [loading, setLoading] = useState(false);
   const [agencyFilter, setAgencyFilter] = useState("all");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [addLeadOpen, setAddLeadOpen] = useState(false);
+  const [leadForm, setLeadForm] = useState({ name: "", phone: "", remarks: "", teamLeaderId: "" });
+  const [addLeadLoading, setAddLeadLoading] = useState(false);
 
   const { data: agencies } = useQuery({
     queryKey: ["/api/agencies"],
@@ -50,6 +56,11 @@ export default function RCLookupPage() {
     },
   });
 
+  const { data: teamLeaders } = useQuery({
+    queryKey: ["/api/users/team-leaders"],
+    queryFn: () => apiFetch("/api/users").then((list: any[]) => list.filter((u: any) => u.role === "TEAM_LEADER")),
+    enabled: user?.role === "AGENCY_ADMIN",
+  });
   const agencyPlan = savedRecords?.meta?.plan;
   const recordsError = (savedRecords as any)?.success === false;
 const subscriptionLoaded = !isMasterAdmin ? (!recordsLoading && !recordsFetching) || !!recordsQueryError : true;
@@ -144,6 +155,39 @@ const subscriptionLoaded = !isMasterAdmin ? (!recordsLoading && !recordsFetching
     </div>
   );
 
+  const handleAddLead = async () => {
+    if (!leadForm.name.trim() || !leadForm.phone.trim()) {
+      toast({ title: "Name and phone are required", variant: "destructive" });
+      return;
+    }
+    if (user?.role === "AGENCY_ADMIN" && !leadForm.teamLeaderId) {
+      toast({ title: "Please select a Team Leader", variant: "destructive" });
+      return;
+    }
+    setAddLeadLoading(true);
+    try {
+      const res = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({
+          name: leadForm.name,
+          phone: leadForm.phone,
+          source: "RC Lookup",
+          remarks: leadForm.remarks,
+          teamLeaderId: leadForm.teamLeaderId || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
+      toast({ title: "Lead created successfully" });
+      setAddLeadOpen(false);
+      setLeadForm({ name: "", phone: "", remarks: "" });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setAddLeadLoading(false);
+    }
+  };
   const r = result;
   const records = (savedRecords?.data || []).sort((a: any, b: any) => {
     const dateA = a.rcData?.insurance_details?.insurance_valid_upto ? new Date(a.rcData.insurance_details.insurance_valid_upto).getTime() : Infinity;
@@ -303,6 +347,9 @@ const subscriptionLoaded = !isMasterAdmin ? (!recordsLoading && !recordsFetching
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <Badge className="bg-primary text-white font-mono text-sm px-3 py-1">{rcNumber}</Badge>
+                  <Button size="sm" variant="outline" className="gap-1" onClick={() => { setLeadForm({ name: r.owner_details?.name || "", phone: r.owner_details?.mobile || "", remarks: `RC: ${rcNumber} | ${r.vehicle_details?.maker} ${r.vehicle_details?.model} | Insurance: ${r.insurance_details?.insurance_valid_upto || "N/A"}` }); setAddLeadOpen(true); }}>
+                    <Plus className="w-3 h-3" /> Add as Lead
+                  </Button>
                   <Badge variant={r.owner_details?.status === "ACTIVE" ? "default" : "destructive"} className="gap-1">
                     {r.owner_details?.status === "ACTIVE" ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
                     {r.owner_details?.status}
@@ -419,6 +466,41 @@ const subscriptionLoaded = !isMasterAdmin ? (!recordsLoading && !recordsFetching
           </Card>
         )}
       </div>
+    <Dialog open={addLeadOpen} onOpenChange={setAddLeadOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add as Lead</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Full Name *</Label>
+              <Input value={leadForm.name} onChange={(e) => setLeadForm({ ...leadForm, name: e.target.value })} placeholder="Owner name" />
+            </div>
+            <div className="space-y-2">
+              <Label>Phone *</Label>
+              <Input value={leadForm.phone} onChange={(e) => setLeadForm({ ...leadForm, phone: e.target.value })} placeholder="Enter phone number" />
+            </div>
+            <div className="space-y-2">
+              <Label>Assign to Team Leader</Label>
+              <Select value={leadForm.teamLeaderId} onValueChange={(v) => setLeadForm({ ...leadForm, teamLeaderId: v })}>
+                <SelectTrigger><SelectValue placeholder="Select Team Leader" /></SelectTrigger>
+                <SelectContent>
+                  {(teamLeaders || []).map((tl: any) => (
+                    <SelectItem key={tl.id} value={tl.id}>{tl.fullName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Remarks</Label>
+              <Textarea value={leadForm.remarks} onChange={(e) => setLeadForm({ ...leadForm, remarks: e.target.value })} rows={3} />
+            </div>
+            <Button className="w-full" onClick={handleAddLead} disabled={addLeadLoading}>
+              {addLeadLoading ? "Creating..." : "Create Lead"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

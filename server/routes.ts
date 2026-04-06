@@ -555,7 +555,7 @@ export async function registerRoutes(
         ...req.body,
         agencyCode,
         createdBy: req.user!.id,
-        teamLeaderId: req.user!.role === "TEAM_LEADER" ? req.user!.id : undefined,
+        teamLeaderId: req.user!.role === "TEAM_LEADER" ? req.user!.id : (req.body.teamLeaderId || undefined),
         status: "NEW"
       });
       res.json({ success: true, data: lead });
@@ -754,7 +754,7 @@ export async function registerRoutes(
             service: leadData.service || null,
             agencyCode,
             createdBy: req.user!.id,
-            teamLeaderId: req.user!.role === "TEAM_LEADER" ? req.user!.id : undefined,
+            teamLeaderId: req.user!.role === "TEAM_LEADER" ? req.user!.id : (req.body.teamLeaderId || undefined),
             status: "NEW",
             assignedTo: null,
             followUpDate: null,
