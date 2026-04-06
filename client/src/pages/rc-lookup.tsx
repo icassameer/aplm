@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus } from "lucide-react";
+import { Plus, MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Car, Search, User, Shield, FileText,
@@ -350,6 +350,23 @@ const subscriptionLoaded = !isMasterAdmin ? (!recordsLoading && !recordsFetching
                   <Button size="sm" variant="outline" className="gap-1" onClick={() => { setLeadForm({ name: r.owner_details?.name || "", phone: r.owner_details?.mobile || "", remarks: `RC: ${rcNumber} | ${r.vehicle_details?.maker} ${r.vehicle_details?.model} | Insurance: ${r.insurance_details?.insurance_valid_upto || "N/A"}` }); setAddLeadOpen(true); }}>
                     <Plus className="w-3 h-3" /> Add as Lead
                   </Button>
+                  <a href={`https://wa.me/?text=${encodeURIComponent(`Hello ${r.owner_details?.name || "Sir/Madam"},
+
+We noticed your vehicle *${rcNumber}* (${r.vehicle_details?.maker} ${r.vehicle_details?.model}) insurance with *${r.insurance_details?.insurance_company || "your insurer"}* is expiring on *${r.insurance_details?.insurance_valid_upto || "N/A"}*.
+
+We can help you renew it quickly at the best rates.
+
+✅ Best rates guaranteed
+✅ Instant policy issuance
+✅ All insurance types covered
+
+Regards,
+Team APLM
++91 8830242124`)}`} target="_blank" rel="noopener noreferrer">
+                    <Button size="sm" variant="outline" className="gap-1 text-green-600 border-green-600 hover:bg-green-50">
+                      <MessageCircle className="w-3 h-3" /> WhatsApp
+                    </Button>
+                  </a>
                   <Badge variant={r.owner_details?.status === "ACTIVE" ? "default" : "destructive"} className="gap-1">
                     {r.owner_details?.status === "ACTIVE" ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
                     {r.owner_details?.status}
