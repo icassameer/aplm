@@ -1866,6 +1866,13 @@ Return ONLY valid JSON, no markdown, no explanation.`
         return res.json({ success: true, data: existing.rcData, cached: true, message: "Returned from cache (looked up within 24 hours)" });
       }
 
+      // Same-DB any-agency cache check — check if any other agency in same DB looked up this RC
+      const anyAgencyRecord = await storage.getRcRecordByNumberAnyAgency(cleanRC);
+      if (anyAgencyRecord && new Date(anyAgencyRecord.createdAt!) > oneDayAgo) {
+        await storage.createRcRecord({ agencyCode, rcNumber: cleanRC, rcData: anyAgencyRecord.rcData as any, lookedUpBy: req.user!.id });
+        return res.json({ success: true, data: anyAgencyRecord.rcData, cached: true, message: "Returned from cache (no API call used)" });
+      }
+
       // Cross-DB cache check — check other platform DB before calling API
       try {
         const otherDb = process.env.DATABASE_URL?.includes("ica_crm")

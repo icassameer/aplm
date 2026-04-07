@@ -643,6 +643,10 @@ export class DatabaseStorage implements IStorage {
     );
     return record;
   }
+  async getRcRecordByNumberAnyAgency(rcNumber: string): Promise<RcRecord | undefined> {
+    const [record] = await db.select().from(rcRecords).where(eq(rcRecords.rcNumber, rcNumber)).orderBy(rcRecords.createdAt);
+    return record;
+  }
 
   async createPayment(data: InsertPayment): Promise<Payment> {
     const [record] = await db.insert(payments).values(data).returning();
