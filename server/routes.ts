@@ -1861,7 +1861,7 @@ Return ONLY valid JSON, no markdown, no explanation.`
 
       // Check if already looked up recently (within 24 hours) — save API credits
       const existing = await storage.getRcRecordByNumber(agencyCode, cleanRC);
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const oneDayAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7-day cache
       if (existing && new Date(existing.createdAt!) > oneDayAgo) {
         return res.json({ success: true, data: existing.rcData, cached: true, message: "Returned from cache (looked up within 24 hours)" });
       }
