@@ -768,6 +768,9 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db.update(commissions).set(data).where(eq(commissions.id, id)).returning();
     return updated;
   }
+  async deleteCommissionByLeadId(leadId: string): Promise<void> {
+    await db.delete(commissions).where(eq(commissions.leadId, leadId));
+  }
   async updateService(id: string, data: any): Promise<any> {
     const [updated] = await db.update(services).set(data).where(eq(services.id, id)).returning();
     return updated;

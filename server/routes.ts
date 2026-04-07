@@ -639,6 +639,11 @@ export async function registerRoutes(
           if (commissionAmount > 0) await storage.createCommission({ agencyCode: lead.agencyCode, userId: lead.assignedTo, leadId: lead.id, amount: commissionAmount, paidStatus: "PENDING", convertedAt: new Date() });
         } catch (e) { console.error("[commission]", e); }
       }
+      if (req.body.status && req.body.status !== "CONVERTED" && oldStatus === "CONVERTED") {
+        try {
+          await storage.deleteCommissionByLeadId(lead.id);
+        } catch (e) { console.error("[commission-delete]", e); }
+      }
 
       if (req.body.status && req.body.status !== oldStatus) {
         await storage.createAuditLog({
