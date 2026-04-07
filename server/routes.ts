@@ -1,4 +1,5 @@
 import type { Express, Request, Response, NextFunction } from "express";
+import { Client } from "pg";
 import express from "express";
 import Razorpay from "razorpay";
 import crypto from "crypto";
@@ -1863,6 +1864,29 @@ Return ONLY valid JSON, no markdown, no explanation.`
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       if (existing && new Date(existing.createdAt!) > oneDayAgo) {
         return res.json({ success: true, data: existing.rcData, cached: true, message: "Returned from cache (looked up within 24 hours)" });
+      }
+
+      // Cross-DB cache check — check other platform DB before calling API
+      try {
+        const otherDb = process.env.DATABASE_URL?.includes("ica_crm")
+          ? "postgresql://postgres:Admin@1234@localhost:5432/aplm_crm"
+          : "postgresql://postgres:Admin@1234@localhost:5432/ica_crm";
+        const client = new Client({ connectionString: otherDb });
+        await client.connect();
+        const result = await client.query(
+          "SELECT rc_data, created_at FROM rc_records WHERE rc_number = $1 AND created_at > $2 ORDER BY created_at DESC LIMIT 1",
+          [cleanRC, oneDayAgo]
+        );
+        await client.end();
+        if (result.rows.length > 0) {
+          const crossCached = result.rows[0].rc_data;
+          // Save to own DB so future lookups are local
+          await storage.createRcRecord({ agencyCode, rcNumber: cleanRC, rcData: crossCached, lookedUpBy: req.user!.id });
+          return res.json({ success: true, data: crossCached, cached: true, message: "Returned from cross-platform cache (no API call used)" });
+        }
+      } catch (crossErr) {
+        console.error("[rc-crossdb-cache]", crossErr);
+        // Non-fatal — continue to API call if cross-DB check fails
       }
 
       // Check if API key is configured
