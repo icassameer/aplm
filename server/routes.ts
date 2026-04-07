@@ -1875,9 +1875,7 @@ Return ONLY valid JSON, no markdown, no explanation.`
 
       // Cross-DB cache check — check other platform DB before calling API
       try {
-        const otherDb = process.env.DATABASE_URL?.includes("ica_crm")
-          ? "postgresql://postgres:Admin@1234@localhost:5432/aplm_crm"
-          : "postgresql://postgres:Admin@1234@localhost:5432/ica_crm";
+        const otherDb = process.env.CROSS_DB_URL;
         const client = new Client({ connectionString: otherDb });
         await client.connect();
         const result = await client.query(
