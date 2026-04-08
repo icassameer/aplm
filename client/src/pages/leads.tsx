@@ -755,7 +755,7 @@ export default function LeadsPage() {
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="overflow-y-auto max-h-[90vh]">
           <DialogHeader><DialogTitle>Update Lead: {selectedLead?.name}</DialogTitle></DialogHeader>
-          <form onSubmit={(e) => { e.preventDefault(); updateMutation.mutate(); }} className="space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); if (editForm.status === "CONVERTED" && !editForm.service) { toast({ title: "Service Required", description: "Please select a service before marking lead as Converted.", variant: "destructive" }); return; } updateMutation.mutate(); }} className="space-y-4">
             <div className="space-y-2">
               <Label>Status</Label>
               <Select value={editForm.status} onValueChange={(v) => setEditForm({ ...editForm, status: v })}>
