@@ -1900,27 +1900,30 @@ Return ONLY valid JSON, no markdown, no explanation.`
         return res.status(503).json({ success: false, message: "RC lookup API not configured. Please contact administrator to add RC_API_KEY." });
       }
 
-      // Call RC lookup API (Surepass or similar)
-      const apiUrl = process.env.RC_API_URL || "https://kyc-api.surepass.io/api/v1/rc/rc-full";
-      const apiResponse = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({ id_number: cleanRC }),
-      });
+      // Call RC lookup API — try primary, fall back to RCV2 on backend_down
+      const rcCallApi = async (url: string) => {
+        const resp = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+          body: JSON.stringify({ id_number: cleanRC }),
+        });
+        const data = await resp.json().catch(() => null);
+        return { resp, data };
+      };
 
-      if (!apiResponse.ok) {
-        const errBody = await apiResponse.text();
-        console.error("RC API error:", apiResponse.status, errBody);
-        return res.status(apiResponse.status).json({ success: false, message: "RC API request failed. Please try again." });
+      const primaryUrl = process.env.RC_API_URL || "https://kyc-api.surepass.io/api/v1/rc/rc-full";
+      const rcv2Url = process.env.RC_API_V2_URL || "https://kyc-api.surepass.io/api/v1/rc/rc-v2";
+
+      let { resp: apiResponse, data: apiData } = await rcCallApi(primaryUrl);
+
+      if (!apiData?.success && (apiData?.message_code === "backend_down" || apiData?.message === "Backend Down.")) {
+        console.log(`RC primary backend_down for ${cleanRC}, retrying with RCV2`);
+        ({ resp: apiResponse, data: apiData } = await rcCallApi(rcv2Url));
       }
 
-      const apiData = await apiResponse.json();
-
-      if (!apiData.success || !apiData.data) {
-        return res.status(400).json({ success: false, message: apiData.message || "Vehicle not found or invalid RC number." });
+      if (!apiResponse.ok || !apiData?.success || !apiData?.data) {
+        console.error("RC API error:", apiResponse.status, JSON.stringify(apiData));
+        return res.status(apiResponse.status || 500).json({ success: false, message: apiData?.message || "RC API request failed. Please try again." });
       }
 
       const raw = apiData.data;
