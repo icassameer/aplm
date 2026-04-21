@@ -52,7 +52,7 @@ const PLAN_LIMITS: Record<string, { leadLimit: number; userLimit: number }> = {
   ENTERPRISE: { leadLimit: 10000, userLimit: 25 },
 };
 // Multer with file type validation
-const ALLOWED_AUDIO_TYPES = ["audio/mpeg", "audio/wav", "audio/mp4", "audio/ogg", "audio/webm", "audio/m4a", "video/mp4"];
+const ALLOWED_AUDIO_TYPES = ["audio/mpeg", "audio/wav", "audio/mp4", "audio/ogg", "audio/webm", "audio/m4a", "audio/x-m4a", "audio/aac", "audio/x-aac", "video/mp4", "video/quicktime"];
 const ALLOWED_SHEET_TYPES = [
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "application/vnd.ms-excel",

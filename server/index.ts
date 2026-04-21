@@ -113,7 +113,7 @@ const heavyLimiter = rateLimit({
 app.use("/api/auth/login", loginLimiter);
 app.use("/api/auth/signup", signupLimiter);
 app.use("/api/leads/upload", heavyLimiter);
-app.use("/api/meetings", heavyLimiter);
+app.post("/api/meetings", heavyLimiter);
 app.use("/api/", apiLimiter);
 
 // ─── Auth guard for Replit integration routes ─────────────────────────────────

@@ -34,6 +34,7 @@ export default function MeetingsPage() {
   const [creating, setCreating] = useState(false);
   const [audioLanguage, setAudioLanguage] = useState("auto");
   const [jobProgress, setJobProgress] = useState<{ progress: number; message: string } | null>(null);
+  const [jobDone, setJobDone] = useState(false);
   const [agencyFilter, setAgencyFilter] = useState("all");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -96,17 +97,55 @@ export default function MeetingsPage() {
       if (transcript) formData.append("transcript", transcript);
       if (audioFile) formData.append("audio", audioFile);
 
-      const res = await fetch("/api/meetings", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
+      // Use XHR instead of fetch to track upload progress for large files
+      if (audioFile) {
+        setJobProgress({ progress: 1, message: "📤 Uploading audio... 0%" });
+      }
+      const data = await new Promise<any>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        if (audioFile) {
+          xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) {
+              const uploadPct = Math.round((event.loaded / event.total) * 100);
+              const pct = Math.max(1, Math.round(uploadPct * 0.45));
+              setJobProgress({
+                progress: pct,
+                message: `📤 Uploading audio... ${uploadPct}%`,
+              });
+            } else {
+              // lengthComputable false — show animated indeterminate progress
+              setJobProgress(prev => ({
+                progress: Math.min((prev?.progress ?? 1) + 1, 44),
+                message: "📤 Uploading audio...",
+              }));
+            }
+          };
+          xhr.upload.onloadend = () => {
+            // Upload bytes fully sent — now waiting for server to respond
+            setJobProgress({ progress: 46, message: "⏳ Upload complete, waiting for server..." });
+          };
+        }
+        xhr.onload = () => {
+          try {
+            const response = JSON.parse(xhr.responseText);
+            if (xhr.status >= 200 && xhr.status < 300 && response.success) {
+              resolve(response);
+            } else {
+              reject(new Error(response.message || "Upload failed"));
+            }
+          } catch { reject(new Error("Invalid server response")); }
+        };
+        xhr.onerror = () => reject(new Error("Upload failed. Please check your connection."));
+        xhr.onabort = () => reject(new Error("Upload cancelled."));
+        xhr.open("POST", "/api/meetings");
+        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+        xhr.send(formData);
       });
-      const data = await res.json();
       if (!data.success) throw new Error(data.message);
 
       // If audio file — poll for background job completion
       if (audioFile && data.jobId) {
-        setJobProgress({ progress: 10, message: "🎵 Audio uploaded, processing started..." });
+        setJobProgress({ progress: 50, message: "🎵 Audio uploaded, processing started..." });
         const jobId = data.jobId;
 
         // Poll every 3 seconds
@@ -132,29 +171,24 @@ export default function MeetingsPage() {
             }
           }, 3000);
 
-          // Timeout after 10 minutes
+          // Timeout after 25 minutes (large files like 48-min recordings need more time)
           setTimeout(() => {
             clearInterval(interval);
             reject(new Error("Processing timed out. Please try again."));
-          }, 10 * 60 * 1000);
+          }, 25 * 60 * 1000);
         });
       }
 
       queryClient.invalidateQueries({ queryKey: ["/api/meetings"] });
       queryClient.invalidateQueries({ queryKey: ["/api/meetings/usage"] });
-      setOpen(false);
-      setTitle("");
-      setTranscript("");
-      setAudioFile(null);
-      setJobProgress(null);
-      if (fileRef.current) fileRef.current.value = "";
-      toast({ title: "✅ AI Proceeding analysis complete!" });
+      setJobProgress({ progress: 100, message: "✅ Analysis complete!" });
+      setJobDone(true);
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
       queryClient.invalidateQueries({ queryKey: ["/api/meetings/usage"] });
     } finally {
       setCreating(false);
-      setJobProgress(null);
+      if (!jobDone) setJobProgress(null);
     }
   };
 
@@ -293,7 +327,7 @@ export default function MeetingsPage() {
                       <Input
                         ref={fileRef}
                         type="file"
-                        accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm"
+                        accept="audio/*,video/mp4,.mp3,.wav,.m4a,.mp4,.aac,.ogg,.webm"
                         data-testid="input-audio-file"
                         onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
                       />
@@ -350,9 +384,25 @@ export default function MeetingsPage() {
                             style={{ width: `${jobProgress.progress}%` }}
                           />
                         </div>
-                        <p className="text-xs text-muted-foreground text-center">
-                          ⏱️ Large audio files (5-15 min) take 2-4 minutes to process. Please wait...
-                        </p>
+                        {!jobDone && (
+                          <p className="text-xs text-muted-foreground text-center">
+                            ⏱️ Large audio files (5-15 min) take 2-4 minutes. Files up to 48 min may take 10-15 minutes. Please wait...
+                          </p>
+                        )}
+                        {jobDone && (
+                          <div className="text-center space-y-3 pt-1">
+                            <p className="text-sm text-green-600 font-medium">Your AI Proceeding analysis is ready. Click OK to view the results.</p>
+                            <Button className="w-full" onClick={() => {
+                              setOpen(false);
+                              setTitle("");
+                              setTranscript("");
+                              setAudioFile(null);
+                              setJobProgress(null);
+                              setJobDone(false);
+                              if (fileRef.current) fileRef.current.value = "";
+                            }}>OK</Button>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -462,7 +512,7 @@ export default function MeetingsPage() {
                       )}
                       <Badge variant="secondary" className="text-[10px]">
                         <Calendar className="w-3 h-3 mr-1" />
-                        {new Date(meeting.createdAt).toLocaleDateString()}
+                        {new Date(meeting.createdAt).toLocaleDateString("en-IN")} {new Date(meeting.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
                       </Badge>
                       {meeting.audioFileName && (
                         <Badge variant="outline" className="text-[10px]">
