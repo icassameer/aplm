@@ -8,11 +8,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { IndianRupee, CheckCircle, Clock, Users, Settings, TrendingUp } from "lucide-react";
+import { IndianRupee, CheckCircle, Clock, Users, Settings, TrendingUp, Calendar } from "lucide-react";
 import { useApi } from "@/hooks/use-api";
 
 function formatDate(ts: string) {
   return new Date(ts).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function monthKey(ts: string) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 export default function CommissionPage() {
@@ -23,6 +28,9 @@ export default function CommissionPage() {
   const role = user?.role;
   const [defaultCommission, setDefaultCommission] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [selectedEmployee, setSelectedEmployee] = useState("ALL");
 
   const { data: commissions, isLoading } = useQuery({
     queryKey: ["/api/commissions"],
@@ -71,8 +79,21 @@ export default function CommissionPage() {
     }
   };
 
-  const totalEarned = (commissions || []).reduce((sum: number, c: any) => sum + (c.amount || 0), 0);
-  const totalPaid = (commissions || []).filter((c: any) => c.paidStatus === "PAID").reduce((sum: number, c: any) => sum + (c.amount || 0), 0);
+  // Build employee list from all commissions for the dropdown
+  const allEmployees: Record<string, string> = {};
+  (commissions || []).forEach((c: any) => {
+    if (c.userId) allEmployees[c.userId] = c.userName || c.telecallerName || "Unknown";
+  });
+
+  // Filter by selected month + employee
+  const filtered = (commissions || []).filter((c: any) => {
+    const inMonth = monthKey(c.convertedAt) === selectedMonth;
+    const inEmployee = selectedEmployee === "ALL" || c.userId === selectedEmployee;
+    return inMonth && inEmployee;
+  });
+
+  const totalEarned = filtered.reduce((sum: number, c: any) => sum + (c.amount || 0), 0);
+  const totalPaid = filtered.filter((c: any) => c.paidStatus === "PAID").reduce((sum: number, c: any) => sum + (c.amount || 0), 0);
   const totalPending = totalEarned - totalPaid;
 
   return (
@@ -82,6 +103,34 @@ export default function CommissionPage() {
         <p className="text-sm text-muted-foreground mt-1">
           {role === "TELE_CALLER" ? "Track your earned commissions" : "Manage team commissions and payouts"}
         </p>
+      </div>
+
+      {/* Filters */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-muted-foreground" />
+          <input
+            type="month"
+            value={selectedMonth}
+            onChange={(e) => { setSelectedMonth(e.target.value); setSelectedEmployee("ALL"); }}
+            className="border rounded-md px-3 py-1.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+        {(role === "AGENCY_ADMIN" || role === "TEAM_LEADER") && (
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-muted-foreground" />
+            <select
+              value={selectedEmployee}
+              onChange={(e) => setSelectedEmployee(e.target.value)}
+              className="border rounded-md px-3 py-1.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="ALL">All Employees</option>
+              {Object.entries(allEmployees).sort((a, b) => a[1].localeCompare(b[1])).map(([id, name]) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Summary Cards */}
@@ -150,17 +199,17 @@ export default function CommissionPage() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-4 space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12" />)}</div>
-          ) : !commissions || commissions.length === 0 ? (
+          ) : filtered.length === 0 ? (
             <div className="p-8 text-center">
               <IndianRupee className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">No commissions yet</p>
+              <p className="text-sm text-muted-foreground">No commissions for this period</p>
               <p className="text-xs text-muted-foreground mt-1">Commissions are earned when a lead is converted</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               {(role === "AGENCY_ADMIN" || role === "TEAM_LEADER") ? (() => {
                 const grouped: Record<string, { name: string; ids: string[]; pendingIds: string[]; total: number; pending: number; paid: number; commissionOn: number; totalConverted: number }> = {};
-                commissions.forEach((c: any) => {
+                filtered.forEach((c: any) => {
                   const key = c.userId;
                   if (!grouped[key]) grouped[key] = { name: c.userName || c.telecallerName || "Unknown", teamLeaderName: c.teamLeaderName || "—", ids: [], pendingIds: [], total: 0, pending: 0, paid: 0, commissionOn: 0, totalConverted: c.totalConverted || 0 };
                   grouped[key].ids.push(c.id);
@@ -243,7 +292,7 @@ export default function CommissionPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {commissions.map((c: any) => (
+                  {filtered.map((c: any) => (
                     <tr key={c.id} className="border-b hover:bg-muted/20 transition-colors">
                       <td className="p-3 font-bold text-green-600">₹{c.amount?.toLocaleString("en-IN")}</td>
                       <td className="p-3 text-muted-foreground">{formatDate(c.convertedAt)}</td>
@@ -261,6 +310,15 @@ export default function CommissionPage() {
                     </tr>
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr className="border-t-2 bg-muted/20">
+                    <td className="p-3 font-bold text-green-600">₹{totalEarned.toLocaleString("en-IN")}</td>
+                    <td className="p-3 text-xs text-muted-foreground font-medium">Month Total</td>
+                    <td className="p-3">
+                      {totalPending > 0 && <span className="text-xs text-amber-500 font-medium">₹{totalPending.toLocaleString("en-IN")} pending</span>}
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
               )}
             </div>
