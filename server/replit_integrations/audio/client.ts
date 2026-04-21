@@ -289,7 +289,7 @@ async function transcribeWithSarvam(
       const ffmpeg = spawn("ffmpeg", [
         "-i", inputPath,
         "-f", "segment",
-        "-segment_time", "25",   // 25s chunks — Sarvam API hard limit is 30s
+        "-segment_time", "30",   // 30s chunks — Sarvam API hard limit is 30s
         "-c:a", "libmp3lame",
         "-b:a", "128k",
         "-ar", "16000",
@@ -313,6 +313,7 @@ async function transcribeWithSarvam(
     const transcripts: string[] = [];
     for (let i = 0; i < chunkFiles.length; i++) {
       const chunkBuffer = await readFile(chunkFiles[i]);
+      if (chunkBuffer.length < 8000) { console.log(`Sarvam chunk ${i+1} skipped (too small)`); continue; }
       console.log(`Sarvam chunk ${i+1}/${chunkFiles.length}...`);
       // Retry with exponential backoff for 429 rate limit errors
       let lastErr: any;
@@ -332,8 +333,8 @@ async function transcribeWithSarvam(
         }
       }
       if (lastErr) console.error(`Sarvam chunk ${i+1} failed: ${lastErr.message}`);
-      // 7s delay between chunks to stay within Sarvam free tier (~8 req/min)
-      await new Promise(r => setTimeout(r, 7000));
+      // 5s delay between chunks to stay within Sarvam free tier (~8 req/min)
+      await new Promise(r => setTimeout(r, 5000));
     }
 
     const merged = transcripts.join(" ");
@@ -516,7 +517,8 @@ function removeRepetitions(text: string): string {
  */
 export async function transcribeLargeAudio(
   audioBuffer: Buffer,
-  language?: string
+  language?: string,
+  onProgress?: (msg: string, pct: number) => void
 ): Promise<string> {
   const inputPath = join(tmpdir(), `input-${randomUUID()}.mp3`);
   const chunkDir = join(tmpdir(), `chunks-${randomUUID()}`);
@@ -595,6 +597,8 @@ export async function transcribeLargeAudio(
     for (let i = 0; i < chunkFiles.length; i++) {
       const chunkBuffer = await readFile(chunkFiles[i]);
       console.log(`Transcribing chunk ${i + 1}/${chunkFiles.length} (${Math.round(chunkBuffer.length / 1024)}KB)`);
+      const pct = 20 + Math.round(((i + 1) / chunkFiles.length) * 20);
+      onProgress?.(`🎙️ Transcribing part ${i + 1} of ${chunkFiles.length}...`, pct);
       const chunkTranscript = await speechToText(chunkBuffer, "mp3", language);
       if (chunkTranscript.trim()) {
         transcripts.push(chunkTranscript.trim());

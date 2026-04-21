@@ -1468,6 +1468,7 @@ export async function registerRoutes(
         const userId = req.user!.id;
 
         // Start background processing — stored in DB so all PM2 instances can access it
+        const jobStartTime = Date.now();
         await storage.createJob(jobId, "🎵 Audio received, starting transcription...");
 
         // Return job ID immediately so frontend can poll
@@ -1480,7 +1481,9 @@ export async function registerRoutes(
             await storage.updateJob(jobId, "processing", 15, "🎙️ Transcribing audio... (this may take 1-3 minutes for large files)");
             const audioBuffer = fs.readFileSync(filePath);
             await storage.updateJob(jobId, "processing", 20, "🎙️ Transcribing audio... Large files split into chunks automatically");
-            transcript = await transcribeLargeAudio(audioBuffer, audioLanguage);
+            transcript = await transcribeLargeAudio(audioBuffer, audioLanguage, (msg, pct) => {
+              storage.updateJob(jobId, "processing", pct, msg);
+            });
             try { fs.unlinkSync(filePath); } catch {}
 
             // Step 2 + 3: Speaker diarization + AI Insights in ONE GPT-4o call
@@ -1591,6 +1594,7 @@ Return ONLY valid JSON (no markdown, no explanation, no preamble):
               sentiment: aiInsights.sentiment || "Neutral",
               language,
               createdBy: userId,
+              processingTimeMs: Date.now() - jobStartTime,
             });
 
             await storage.updateJob(jobId, "done", 100, "✅ Analysis complete!", meeting);

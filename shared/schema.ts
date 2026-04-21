@@ -130,7 +130,8 @@ export const meetings = pgTable("meetings", {
   sentiment: text("sentiment"),
   language: text("language"),
   createdBy: text("created_by"),
-  teamLeaderId: text("team_leader_id"),  // Set when TL assigns lead
+  teamLeaderId: text("team_leader_id"),
+  processingTimeMs: integer("processing_time_ms"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("meetings_agency_idx").on(table.agencyCode),

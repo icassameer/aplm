@@ -514,6 +514,13 @@ export default function MeetingsPage() {
                         <Calendar className="w-3 h-3 mr-1" />
                         {new Date(meeting.createdAt).toLocaleDateString("en-IN")} {new Date(meeting.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
                       </Badge>
+                      {meeting.processingTimeMs && (
+                        <Badge variant="outline" className="text-[10px] text-blue-600 border-blue-200">
+                          ⏱️ {meeting.processingTimeMs < 60000
+                            ? `${Math.round(meeting.processingTimeMs / 1000)}s`
+                            : `${Math.floor(meeting.processingTimeMs / 60000)}m ${Math.round((meeting.processingTimeMs % 60000) / 1000)}s`}
+                        </Badge>
+                      )}
                       {meeting.audioFileName && (
                         <Badge variant="outline" className="text-[10px]">
                           <FileAudio className="w-3 h-3 mr-1" />
