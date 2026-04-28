@@ -86,7 +86,7 @@ export default function LeadsPage() {
   const { data: leadsData, isLoading } = useQuery({
     queryKey: ["/api/leads", page, statusFilter, assignmentFilter, telecallerFilter, searchDebounced],
     queryFn: () => apiFetch(`/api/leads?page=${page}&limit=${limit}${statusFilter !== "ALL" ? `&status=${statusFilter}` : ""}${assignmentFilter !== "ALL" ? `&assignment=${assignmentFilter}` : ""}${telecallerFilter !== "ALL" ? `&assignedTo=${telecallerFilter}` : ""}${searchDebounced ? `&search=${encodeURIComponent(searchDebounced)}` : ""}`),
-    enabled: !isAgencyAdmin,
+    enabled: !isAgencyAdmin || !!searchDebounced,
     placeholderData: (prev: any) => prev,
   });
 
@@ -251,7 +251,7 @@ export default function LeadsPage() {
       setSelectedLeadIds(prev => [...new Set([...prev, ...pageIds])]);
     }
   };
-  const total = isAgencyAdmin
+  const total = (isAgencyAdmin && !searchDebounced)
     ? Object.values(leadStatsData || {}).reduce((sum: number, v: any) => sum + (typeof v === "number" ? v : 0), 0)
     : leadsData?.total || 0;
   const totalPages = Math.ceil(total / limit);
@@ -284,19 +284,17 @@ export default function LeadsPage() {
           <p className="text-sm text-muted-foreground mt-1">{total} total leads</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
-          {!isAgencyAdmin && (
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
-              <Input
-                ref={searchInputRef}
-                data-testid="input-lead-search"
-                placeholder="Search name, phone, email..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 w-full sm:w-52"
-              />
-            </div>
-          )}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+            <Input
+              ref={searchInputRef}
+              data-testid="input-lead-search"
+              placeholder="Search name, phone, email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 w-full sm:w-52"
+            />
+          </div>
           {!isAgencyAdmin && (
             <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
               <SelectTrigger className="w-full sm:w-40" data-testid="select-status-filter">
@@ -490,7 +488,7 @@ export default function LeadsPage() {
         </div>
       </div>
 
-      {isAgencyAdmin ? (
+      {isAgencyAdmin && !searchDebounced ? (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {Object.entries(statusConfig).map(([key, config]) => {
             const StatusIcon = config.icon;
