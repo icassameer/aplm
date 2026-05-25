@@ -76,11 +76,11 @@ const AI_PROCEEDING_LIMITS: Record<string, number> = {
   ENTERPRISE: 40,  // 40 transcriptions per month
 };
 
-// RC Lookup monthly limits per plan
+// RC Lookup yearly limits per plan
 const RC_LOOKUP_LIMITS: Record<string, number> = {
-  BASIC: 0,        // No RC access
-  PRO: 50,         // 50 lookups per month
-  ENTERPRISE: 100, // 100 lookups per month (APLM)
+  BASIC: 0,          // No RC access
+  PRO: 600,          // 600 lookups per year
+  ENTERPRISE: 1200,  // 1200 lookups per year
 };
 
 function generateToken(user: User & { sessionToken?: string | null }): string {
@@ -561,9 +561,6 @@ export async function registerRoutes(
       });
       res.json({ success: true, data: lead });
     } catch (error: any) {
-      if (error.message?.includes("unique") || error.message?.includes("duplicate")) {
-        return res.status(400).json({ success: false, message: "A lead with this phone number already exists" });
-      }
       console.error(error);
       res.status(500).json({ success: false, message: "Internal server error" });
     }
@@ -619,6 +616,11 @@ export async function registerRoutes(
       }
 
       const updateData = { ...req.body };
+      if (req.user!.role === "TELE_CALLER") {
+        delete updateData.name;
+        delete updateData.phone;
+        delete updateData.email;
+      }
       if (updateData.followUpDate) {
         updateData.followUpDate = new Date(updateData.followUpDate);
       }
@@ -768,13 +770,9 @@ export async function registerRoutes(
           });
           results.created++;
         } catch (err: any) {
-          if (err.message?.includes("unique") || err.message?.includes("duplicate")) {
-            results.duplicates++;
-          } else {
-            results.invalid++;
-            console.error(`Bulk lead import error for ${leadData.phone}:`, err);
-            results.errors.push(`${leadData.phone}: Import failed`);
-          }
+          results.invalid++;
+          console.error(`Bulk lead import error for ${leadData.phone}:`, err);
+          results.errors.push(`${leadData.phone}: Import failed`);
         }
       }
 
@@ -830,11 +828,8 @@ export async function registerRoutes(
           });
           results.created++;
         } catch (err: any) {
-          if (err.message?.includes("unique") || err.message?.includes("duplicate")) {
-            results.duplicates++;
-          } else {
-            results.invalid++;
-          }
+          results.invalid++;
+          console.error(`Lead upload error for row:`, err);
         }
       }
 
@@ -1845,18 +1840,17 @@ Return ONLY valid JSON, no markdown, no explanation.`
       const rcLimit = RC_LOOKUP_LIMITS[plan] ?? 0;
 
       if (rcLimit !== Infinity) {
-        // Count RC lookups this month
+        // Count RC lookups this year
         const allRecords = await storage.getRcRecordsByAgency(agencyCode);
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
-        const thisMonthCount = allRecords.filter(r => new Date(r.createdAt!) >= startOfMonth).length;
+        const startOfYear = new Date(new Date().getFullYear(), 0, 1);
+        startOfYear.setHours(0, 0, 0, 0);
+        const thisYearCount = allRecords.filter(r => new Date(r.createdAt!) >= startOfYear).length;
 
-        if (thisMonthCount >= rcLimit) {
+        if (thisYearCount >= rcLimit) {
           return res.status(403).json({
             success: false,
-            message: `RC lookup limit reached. Your ${plan} plan allows ${rcLimit} lookups/month. Used: ${thisMonthCount}/${rcLimit}. Upgrade to get more lookups.`,
-            used: thisMonthCount,
+            message: `RC lookup limit reached. Your ${plan} plan allows ${rcLimit} lookups/year. Used: ${thisYearCount}/${rcLimit}.`,
+            used: thisYearCount,
             limit: rcLimit,
             plan,
           });
@@ -2010,13 +2004,12 @@ Return ONLY valid JSON, no markdown, no explanation.`
       const agencyCode = req.user!.agencyCode!;
       const records = await storage.getRcRecordsByAgency(agencyCode);
 
-      // Calculate this month's usage
+      // Calculate this year's usage
       const agency = await storage.getAgencyByCode(agencyCode);
       const plan = agency?.plan as string || "BASIC";
       const limit = RC_LOOKUP_LIMITS[plan] ?? 0;
-      const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const used = records.filter(r => new Date(r.createdAt!) >= monthStart).length;
+      const yearStart = new Date(new Date().getFullYear(), 0, 1);
+      const used = records.filter(r => new Date(r.createdAt!) >= yearStart).length;
 
       res.json({
         success: true,

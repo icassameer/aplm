@@ -63,7 +63,7 @@ export default function LeadsPage() {
   });
   const [uploadTeamLeaderId, setUploadTeamLeaderId] = useState("");
   const [editForm, setEditForm] = useState({
-    status: "", remarks: "", followUpDate: "", service: ""
+    name: "", phone: "", email: "", status: "", remarks: "", followUpDate: "", service: ""
   });
   const [assignTo, setAssignTo] = useState("");
   const [assignService, setAssignService] = useState("");
@@ -620,6 +620,9 @@ export default function LeadsPage() {
                             onClick={() => {
                               setSelectedLead(lead);
                               setEditForm({
+                                name: lead.name || "",
+                                phone: lead.phone || "",
+                                email: lead.email || "",
                                 status: lead.status,
                                 remarks: lead.remarks || "",
                                 followUpDate: lead.followUpDate ? new Date(lead.followUpDate).toISOString().split("T")[0] : "",
@@ -754,6 +757,22 @@ export default function LeadsPage() {
         <DialogContent className="overflow-y-auto max-h-[90vh]">
           <DialogHeader><DialogTitle>Update Lead: {selectedLead?.name}</DialogTitle></DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); if (editForm.status === "CONVERTED" && !editForm.service) { toast({ title: "Service Required", description: "Please select a service before marking lead as Converted.", variant: "destructive" }); return; } updateMutation.mutate(); }} className="space-y-4">
+            {user?.role !== "TELE_CALLER" && (
+              <div className="space-y-3 pb-3 border-b">
+                <div className="space-y-1">
+                  <Label>Name</Label>
+                  <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} placeholder="Lead name" required />
+                </div>
+                <div className="space-y-1">
+                  <Label>Mobile Number</Label>
+                  <Input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} placeholder="Phone number" required />
+                </div>
+                <div className="space-y-1">
+                  <Label>Email <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                  <Input value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} placeholder="Email address" type="email" />
+                </div>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Status</Label>
               <Select value={editForm.status} onValueChange={(v) => setEditForm({ ...editForm, status: v })}>
