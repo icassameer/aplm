@@ -635,8 +635,9 @@ export async function registerRoutes(
         try {
           const agency = await storage.getAgencyByCode(lead.agencyCode);
           let commissionAmount = agency?.commissionPerLead || 0;
-          if (lead.service) {
-            const svc = await storage.getServiceByName(lead.agencyCode, lead.service);
+          const serviceName = req.body.service || lead.service;
+          if (serviceName) {
+            const svc = await storage.getServiceByName(lead.agencyCode, serviceName);
             if (svc && svc.commissionAmount && svc.commissionAmount > 0) commissionAmount = svc.commissionAmount;
           }
           if (commissionAmount > 0) await storage.createCommission({ agencyCode: lead.agencyCode, userId: lead.assignedTo, leadId: lead.id, amount: commissionAmount, paidStatus: "PENDING", convertedAt: new Date() });
@@ -1840,11 +1841,9 @@ Return ONLY valid JSON, no markdown, no explanation.`
       const rcLimit = RC_LOOKUP_LIMITS[plan] ?? 0;
 
       if (rcLimit !== Infinity) {
-        // Count RC lookups this year
-        const allRecords = await storage.getRcRecordsByAgency(agencyCode);
+        // Count RC lookups this year via direct DB count
         const startOfYear = new Date(new Date().getFullYear(), 0, 1);
-        startOfYear.setHours(0, 0, 0, 0);
-        const thisYearCount = allRecords.filter(r => new Date(r.createdAt!) >= startOfYear).length;
+        const thisYearCount = await storage.countRcRecordsByAgencySince(agencyCode, startOfYear);
 
         if (thisYearCount >= rcLimit) {
           return res.status(403).json({
@@ -2004,12 +2003,12 @@ Return ONLY valid JSON, no markdown, no explanation.`
       const agencyCode = req.user!.agencyCode!;
       const records = await storage.getRcRecordsByAgency(agencyCode);
 
-      // Calculate this year's usage
+      // Calculate this year's usage via direct DB count (not limited to 50)
       const agency = await storage.getAgencyByCode(agencyCode);
       const plan = agency?.plan as string || "BASIC";
       const limit = RC_LOOKUP_LIMITS[plan] ?? 0;
       const yearStart = new Date(new Date().getFullYear(), 0, 1);
-      const used = records.filter(r => new Date(r.createdAt!) >= yearStart).length;
+      const used = await storage.countRcRecordsByAgencySince(agencyCode, yearStart);
 
       res.json({
         success: true,

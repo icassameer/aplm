@@ -1,4 +1,4 @@
-import { eq, and, or, desc, asc, count, sql, ilike, isNull, isNotNull, lt, gt, inArray } from "drizzle-orm";
+import { eq, and, or, desc, asc, count, sql, ilike, isNull, isNotNull, lt, gt, gte, inArray } from "drizzle-orm";
 import { db } from "./db";
 import {
   agencies, users, leads, auditLogs, meetings, services, upgradeRequests, rcRecords, processingJobs, payments,
@@ -78,6 +78,7 @@ export interface IStorage {
 
   createRcRecord(record: InsertRcRecord): Promise<RcRecord>;
   getRcRecordsByAgency(agencyCode: string): Promise<RcRecord[]>;
+  countRcRecordsByAgencySince(agencyCode: string, since: Date): Promise<number>;
   getAllRcRecords(): Promise<RcRecord[]>;
   deleteRcRecord(id: string): Promise<void>;
   getRcRecordByNumber(agencyCode: string, rcNumber: string): Promise<RcRecord | undefined>;
@@ -627,6 +628,12 @@ export class DatabaseStorage implements IStorage {
 
   async getRcRecordsByAgency(agencyCode: string): Promise<RcRecord[]> {
     return db.select().from(rcRecords).where(eq(rcRecords.agencyCode, agencyCode)).orderBy(desc(rcRecords.createdAt)).limit(50);
+  }
+
+  async countRcRecordsByAgencySince(agencyCode: string, since: Date): Promise<number> {
+    const [result] = await db.select({ count: count() }).from(rcRecords)
+      .where(and(eq(rcRecords.agencyCode, agencyCode), gte(rcRecords.createdAt, since)));
+    return result.count;
   }
 
   async getAllRcRecords(): Promise<RcRecord[]> {
