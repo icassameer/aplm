@@ -76,11 +76,11 @@ const AI_PROCEEDING_LIMITS: Record<string, number> = {
   ENTERPRISE: 40,  // 40 transcriptions per month
 };
 
-// RC Lookup yearly limits per plan
+// RC Lookup monthly limits per plan
 const RC_LOOKUP_LIMITS: Record<string, number> = {
-  BASIC: 0,          // No RC access
-  PRO: 600,          // 600 lookups per year
-  ENTERPRISE: 1200,  // 1200 lookups per year
+  BASIC: 0,        // No RC access
+  PRO: 50,         // 50 lookups per month
+  ENTERPRISE: 200, // 200 lookups per month
 };
 
 function generateToken(user: User & { sessionToken?: string | null }): string {
@@ -164,6 +164,9 @@ export async function registerRoutes(
       if (user.agencyCode && user.role !== "MASTER_ADMIN") {
         const agency = await storage.getAgencyByCode(user.agencyCode);
         if (agency && !agency.isActive) return res.status(403).json({ success: false, message: "Agency is deactivated" });
+        if (agency?.subscriptionExpiry && new Date() > new Date(agency.subscriptionExpiry)) {
+          return res.status(403).json({ success: false, message: "Subscription expired. Please renew your plan to continue." });
+        }
       }
 
       const sessionToken = require("crypto").randomBytes(32).toString("hex");
@@ -294,7 +297,7 @@ export async function registerRoutes(
 
   app.post("/api/users/approve/:id", authMiddleware, roleMiddleware("MASTER_ADMIN", "AGENCY_ADMIN"), async (req: AuthRequest, res: Response) => {
     try {
-      const targetUser = await storage.getUser(req.params.id);
+      const targetUser = await storage.getUser(req.params.id as string);
       if (!targetUser) return res.status(404).json({ success: false, message: "User not found" });
 
       if (req.user!.role === "AGENCY_ADMIN" && targetUser.agencyCode !== req.user!.agencyCode) {
@@ -313,16 +316,14 @@ export async function registerRoutes(
         if (agencyCode) updateData.agencyCode = agencyCode;
       }
 
-      await storage.updateUser(req.params.id, updateData);
+      await storage.updateUser(req.params.id as string, updateData);
 
       await storage.createAuditLog({
         agencyCode: targetUser.agencyCode || req.user!.agencyCode || "SYSTEM",
         leadId: null, userId: req.user!.id,
         action: "USER_APPROVED", oldStatus: "PENDING_APPROVAL", newStatus: "ACTIVE",
-        remarks: `User approved by ${req.user!.role}${updateData.role ? ` as ${updateData.role}` : ''}`, targetUserId: req.params.id,
+        remarks: `User approved by ${req.user!.role}${updateData.role ? ` as ${updateData.role}` : ''}`, targetUserId: req.params.id as string,
       });
-
-      res.json({ success: true, message: "User approved" });
 
       res.json({ success: true, message: "User approved" });
     } catch (error: any) {
@@ -333,14 +334,14 @@ export async function registerRoutes(
 
   app.post("/api/users/reject/:id", authMiddleware, roleMiddleware("MASTER_ADMIN", "AGENCY_ADMIN"), async (req: AuthRequest, res: Response) => {
     try {
-      const targetUser = await storage.getUser(req.params.id);
+      const targetUser = await storage.getUser(req.params.id as string);
       if (!targetUser) return res.status(404).json({ success: false, message: "User not found" });
 
       if (req.user!.role === "AGENCY_ADMIN" && targetUser.agencyCode !== req.user!.agencyCode) {
         return res.status(403).json({ success: false, message: "Cannot reject users from another agency" });
       }
 
-      await storage.updateUser(req.params.id, { status: "INACTIVE", isActive: false });
+      await storage.updateUser(req.params.id as string, { status: "INACTIVE", isActive: false });
       res.json({ success: true, message: "User rejected" });
     } catch (error: any) {
       console.error(error);
@@ -382,7 +383,7 @@ export async function registerRoutes(
 
   app.patch("/api/agencies/:id", authMiddleware, roleMiddleware("MASTER_ADMIN"), async (req: AuthRequest, res: Response) => {
     try {
-      const updated = await storage.updateAgency(req.params.id, req.body);
+      const updated = await storage.updateAgency(req.params.id as string, req.body);
       if (!updated) return res.status(404).json({ success: false, message: "Agency not found" });
       res.json({ success: true, data: updated });
     } catch (error: any) {
@@ -393,9 +394,9 @@ export async function registerRoutes(
 
   app.delete("/api/agencies/:id", authMiddleware, roleMiddleware("MASTER_ADMIN"), async (req: AuthRequest, res: Response) => {
     try {
-      const agency = await storage.getAgency(req.params.id);
+      const agency = await storage.getAgency(req.params.id as string);
       if (!agency) return res.status(404).json({ success: false, message: "Agency not found" });
-      await storage.deleteAgency(req.params.id);
+      await storage.deleteAgency(req.params.id as string);
       res.json({ success: true, message: "Agency and all associated data deleted" });
     } catch (error: any) {
       console.error(error);
@@ -499,7 +500,7 @@ export async function registerRoutes(
 
   app.patch("/api/users/:id", authMiddleware, roleMiddleware("MASTER_ADMIN", "AGENCY_ADMIN"), async (req: AuthRequest, res: Response) => {
     try {
-      const targetUser = await storage.getUser(req.params.id);
+      const targetUser = await storage.getUser(req.params.id as string);
       if (!targetUser) return res.status(404).json({ success: false, message: "User not found" });
 
       if (req.user!.role === "AGENCY_ADMIN" && targetUser.agencyCode !== req.user!.agencyCode) {
@@ -514,7 +515,7 @@ export async function registerRoutes(
       if (data.password) {
         data.password = await bcrypt.hash(data.password, 10);
       }
-      const updated = await storage.updateUser(req.params.id, data);
+      const updated = await storage.updateUser(req.params.id as string, data);
       if (!updated) return res.status(404).json({ success: false, message: "User not found" });
       const { password: _, ...safeUser } = updated;
       res.json({ success: true, data: safeUser });
@@ -526,12 +527,12 @@ export async function registerRoutes(
 
   app.delete("/api/users/:id", authMiddleware, roleMiddleware("MASTER_ADMIN"), async (req: AuthRequest, res: Response) => {
     try {
-      const targetUser = await storage.getUser(req.params.id);
+      const targetUser = await storage.getUser(req.params.id as string);
       if (!targetUser) return res.status(404).json({ success: false, message: "User not found" });
       if (targetUser.role === "MASTER_ADMIN") {
         return res.status(403).json({ success: false, message: "Cannot delete Master Admin" });
       }
-      await storage.deleteUser(req.params.id);
+      await storage.deleteUser(req.params.id as string);
       res.json({ success: true, message: "User deleted successfully" });
     } catch (error: any) {
       console.error(error);
@@ -561,6 +562,9 @@ export async function registerRoutes(
       });
       res.json({ success: true, data: lead });
     } catch (error: any) {
+      if (error.message?.includes("unique") || error.message?.includes("duplicate")) {
+        return res.status(400).json({ success: false, message: "A lead with this phone number already exists" });
+      }
       console.error(error);
       res.status(500).json({ success: false, message: "Internal server error" });
     }
@@ -593,7 +597,7 @@ export async function registerRoutes(
 
   app.patch("/api/leads/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-      const lead = await storage.getLead(req.params.id);
+      const lead = await storage.getLead(req.params.id as string);
       if (!lead) return res.status(404).json({ success: false, message: "Lead not found" });
 
       if (req.user!.agencyCode && lead.agencyCode !== req.user!.agencyCode) {
@@ -616,11 +620,6 @@ export async function registerRoutes(
       }
 
       const updateData = { ...req.body };
-      if (req.user!.role === "TELE_CALLER") {
-        delete updateData.name;
-        delete updateData.phone;
-        delete updateData.email;
-      }
       if (updateData.followUpDate) {
         updateData.followUpDate = new Date(updateData.followUpDate);
       }
@@ -630,14 +629,13 @@ export async function registerRoutes(
       if (oldStatus === "NEW" && updateData.status && updateData.status !== "NEW" && !lead.firstContactedAt) {
         updateData.firstContactedAt = new Date();
       }
-      const updated = await storage.updateLead(req.params.id, updateData);
+      const updated = await storage.updateLead(req.params.id as string, updateData);
       if (req.body.status === "CONVERTED" && oldStatus !== "CONVERTED" && lead.assignedTo) {
         try {
           const agency = await storage.getAgencyByCode(lead.agencyCode);
           let commissionAmount = agency?.commissionPerLead || 0;
-          const serviceName = req.body.service || lead.service;
-          if (serviceName) {
-            const svc = await storage.getServiceByName(lead.agencyCode, serviceName);
+          if (lead.service) {
+            const svc = await storage.getServiceByName(lead.agencyCode, lead.service);
             if (svc && svc.commissionAmount && svc.commissionAmount > 0) commissionAmount = svc.commissionAmount;
           }
           if (commissionAmount > 0) await storage.createCommission({ agencyCode: lead.agencyCode, userId: lead.assignedTo, leadId: lead.id, amount: commissionAmount, paidStatus: "PENDING", convertedAt: new Date() });
@@ -684,12 +682,12 @@ export async function registerRoutes(
 
   app.delete("/api/leads/:id", authMiddleware, roleMiddleware("TEAM_LEADER"), async (req: AuthRequest, res: Response) => {
     try {
-      const lead = await storage.getLead(req.params.id);
+      const lead = await storage.getLead(req.params.id as string);
       if (!lead) return res.status(404).json({ success: false, message: "Lead not found" });
       if (lead.agencyCode !== req.user!.agencyCode) {
         return res.status(403).json({ success: false, message: "Access denied" });
       }
-      await storage.deleteLead(req.params.id);
+      await storage.deleteLead(req.params.id as string);
       res.json({ success: true, message: "Lead deleted" });
     } catch (error: any) {
       console.error(error);
@@ -771,9 +769,13 @@ export async function registerRoutes(
           });
           results.created++;
         } catch (err: any) {
-          results.invalid++;
-          console.error(`Bulk lead import error for ${leadData.phone}:`, err);
-          results.errors.push(`${leadData.phone}: Import failed`);
+          if (err.message?.includes("unique") || err.message?.includes("duplicate")) {
+            results.duplicates++;
+          } else {
+            results.invalid++;
+            console.error(`Bulk lead import error for ${leadData.phone}:`, err);
+            results.errors.push(`${leadData.phone}: Import failed`);
+          }
         }
       }
 
@@ -829,8 +831,11 @@ export async function registerRoutes(
           });
           results.created++;
         } catch (err: any) {
-          results.invalid++;
-          console.error(`Lead upload error for row:`, err);
+          if (err.message?.includes("unique") || err.message?.includes("duplicate")) {
+            results.duplicates++;
+          } else {
+            results.invalid++;
+          }
         }
       }
 
@@ -884,7 +889,7 @@ export async function registerRoutes(
 
   app.delete("/api/services/:id", authMiddleware, roleMiddleware("AGENCY_ADMIN"), async (req: AuthRequest, res: Response) => {
     try {
-      await storage.deleteService(req.params.id);
+      await storage.deleteService(req.params.id as string);
       res.json({ success: true, message: "Service deleted" });
     } catch (error: any) {
       console.error(error);
@@ -897,7 +902,7 @@ export async function registerRoutes(
     try {
       const { commissionAmount } = req.body;
       if (commissionAmount === undefined) return res.status(400).json({ success: false, message: "commissionAmount required" });
-      const updated = await storage.updateService(req.params.id, { commissionAmount: Number(commissionAmount) });
+      const updated = await storage.updateService(req.params.id as string, { commissionAmount: Number(commissionAmount) });
       res.json({ success: true, data: updated });
     } catch (error: any) {
       console.error(error);
@@ -1054,7 +1059,7 @@ export async function registerRoutes(
   // v9.4 — Commissions: Mark as paid (Agency Admin only)
   app.patch("/api/commissions/:id/paid", authMiddleware, roleMiddleware("AGENCY_ADMIN"), async (req: AuthRequest, res: Response) => {
     try {
-      const updated = await storage.updateCommission(req.params.id, { paidStatus: "PAID", paidAt: new Date() });
+      const updated = await storage.updateCommission(req.params.id as string, { paidStatus: "PAID", paidAt: new Date() });
       res.json({ success: true, data: updated });
     } catch (error: any) {
       console.error(error);
@@ -1129,10 +1134,10 @@ export async function registerRoutes(
         return res.status(400).json({ success: false, message: "Invalid status" });
       }
 
-      const request = await storage.getUpgradeRequest(req.params.id);
+      const request = await storage.getUpgradeRequest(req.params.id as string);
       if (!request) return res.status(404).json({ success: false, message: "Request not found" });
 
-      await storage.updateUpgradeRequest(req.params.id, { status });
+      await storage.updateUpgradeRequest(req.params.id as string, { status });
 
       if (status === "APPROVED") {
         const agency = await storage.getAgencyByCode(request.agencyCode);
@@ -1329,7 +1334,8 @@ export async function registerRoutes(
       }
       if (!agencyCode) return res.status(400).json({ success: false, message: "No agency" });
       const assignedTo = req.user!.role === "TELE_CALLER" ? req.user!.id : undefined;
-      const stats = await storage.getLeadStats(agencyCode, assignedTo);
+      const teamLeaderId = req.user!.role === "TEAM_LEADER" ? req.user!.id : undefined;
+      const stats = await storage.getLeadStats(agencyCode, assignedTo, teamLeaderId);
       res.json({ success: true, data: stats });
     } catch (error: any) {
       console.error(error);
@@ -1420,7 +1426,7 @@ export async function registerRoutes(
 
   // GET /api/meetings/job/:jobId — check background job status (DB-backed, works across PM2 cluster)
   app.get("/api/meetings/job/:jobId", authMiddleware, async (req: AuthRequest, res: Response) => {
-    const job = await storage.getJob(req.params.jobId);
+    const job = await storage.getJob(req.params.jobId as string);
     if (!job) return res.status(404).json({ success: false, message: "Job not found" });
     res.json({ success: true, status: job.status, progress: job.progress, message: job.message, result: job.result, error: job.error });
   });
@@ -1464,8 +1470,8 @@ export async function registerRoutes(
         const userId = req.user!.id;
 
         // Start background processing — stored in DB so all PM2 instances can access it
-        const jobStartTime = Date.now();
         await storage.createJob(jobId, "🎵 Audio received, starting transcription...");
+        const jobStartTime = Date.now();
 
         // Return job ID immediately so frontend can poll
         res.json({ success: true, jobId, message: "Processing started in background" });
@@ -1521,7 +1527,6 @@ YOUR TWO TASKS:
 
 Return ONLY valid JSON (no markdown, no explanation, no preamble):
 {
-  "diarizedTranscript": "Speaker 1: ...\nSpeaker 2: ...",
   "summary": "5-8 sentence summary covering: who spoke, purpose of call/meeting, key points discussed, decisions made, and outcome",
   "targets": ["specific target or goal with numbers/timeline if mentioned"],
   "achievements": ["achievement or milestone with data"],
@@ -1540,19 +1545,23 @@ Return ONLY valid JSON (no markdown, no explanation, no preamble):
                   },
                   {
                     role: "user",
-                    content: `Meeting Title: ${title}\n\nRaw Transcript:\n${transcript}`
+                    content: `Meeting Title: ${title}\n\nRaw Transcript:\n${transcript.length > 20000 ? transcript.slice(0, 20000) + "\n\n[transcript truncated — only first portion sent for analysis]" : transcript}`
                   }
                 ],
-                temperature: 0.2,
-                max_tokens: 4000,
+                temperature: 0,
+                seed: 42,
+                response_format: { type: "json_object" },
+                max_tokens: 8000,
               });
 
               const raw = gptResponse.choices[0]?.message?.content?.trim() || "{}";
               const cleaned = raw.replace(/```json|```/g, "").trim();
               const parsed = JSON.parse(cleaned);
-
               if (parsed.diarizedTranscript?.trim()) {
-                diarizedTranscript = parsed.diarizedTranscript;
+                // GPT cleaned first portion — append raw remainder if transcript was truncated
+                const gptPortion = parsed.diarizedTranscript;
+                const rawRemainder = transcript.length > 5000 ? "\n\n[...]\n\n" + transcript.slice(5000) : "";
+                diarizedTranscript = gptPortion + rawRemainder;
               }
               const { diarizedTranscript: _dt, ...insightsOnly } = parsed;
               aiInsights = insightsOnly;
@@ -1641,7 +1650,9 @@ Return ONLY valid JSON, no markdown, no explanation.`
 
             { role: "user", content: `Meeting Title: ${title}\n\nTranscript (with speakers identified):\n${diarizedTranscript}` }
           ],
-          temperature: 0.3,
+          temperature: 0,
+          seed: 42,
+          response_format: { type: "json_object" },
         });
 
         const content = gptResponse.choices[0]?.message?.content || "{}";
@@ -1725,9 +1736,9 @@ Return ONLY valid JSON, no markdown, no explanation.`
 
   app.delete("/api/meetings/:id", authMiddleware, roleMiddleware("MASTER_ADMIN"), async (req: AuthRequest, res: Response) => {
     try {
-      const meeting = await storage.getMeeting(req.params.id);
+      const meeting = await storage.getMeeting(req.params.id as string);
       if (!meeting) return res.status(404).json({ success: false, message: "Meeting not found" });
-      await storage.deleteMeeting(req.params.id);
+      await storage.deleteMeeting(req.params.id as string);
       res.json({ success: true, message: "Meeting deleted" });
     } catch (error: any) {
       console.error(error);
@@ -1764,9 +1775,14 @@ Return ONLY valid JSON, no markdown, no explanation.`
       if (!agencyCode) return res.status(400).json({ success: false, message: "No agency" });
 
       const agency = await storage.getAgencyByCode(agencyCode);
-      const stats = await storage.getLeadStats(agencyCode, req.user!.role === "TELE_CALLER" ? req.user!.id : undefined);
+
+      const tlId = req.user!.role === "TEAM_LEADER" ? req.user!.id : undefined;
+      const tcId = req.user!.role === "TELE_CALLER" ? req.user!.id : undefined;
+      const stats = await storage.getLeadStats(agencyCode, tcId, tlId);
       const totalLeads = Object.values(stats).reduce((a: number, b: number) => a + b, 0);
-      const userCount = await storage.countUsersByAgency(agencyCode);
+      const userCount = tlId
+        ? (await storage.getTelecallersByTeamLeader(tlId)).length + 1  // TCs + TL themselves
+        : await storage.countUsersByAgency(agencyCode);
 
       const extraData: any = { agency, leadStats: stats, totalLeads, userCount };
 
@@ -1787,10 +1803,11 @@ Return ONLY valid JSON, no markdown, no explanation.`
       }
 
       if (req.user!.role === "TEAM_LEADER") {
-        const teamUsers = await storage.getUsersByAgency(agencyCode);
-        const telecallers = teamUsers.filter(u => u.role === "TELE_CALLER" && u.status === "ACTIVE");
+        // Only TCs under THIS team leader
+        const myTelecallers = await storage.getTelecallersByTeamLeader(req.user!.id);
+        const activeTelecallers = myTelecallers.filter(u => u.status === "ACTIVE");
         const telecallerStats = await Promise.all(
-          telecallers.map(async (tc) => {
+          activeTelecallers.map(async (tc) => {
             const tcStats = await storage.getLeadStats(agencyCode, tc.id);
             return { name: tc.fullName, ...tcStats };
           })
@@ -1841,15 +1858,18 @@ Return ONLY valid JSON, no markdown, no explanation.`
       const rcLimit = RC_LOOKUP_LIMITS[plan] ?? 0;
 
       if (rcLimit !== Infinity) {
-        // Count RC lookups this year via direct DB count
-        const startOfYear = new Date(new Date().getFullYear(), 0, 1);
-        const thisYearCount = await storage.countRcRecordsByAgencySince(agencyCode, startOfYear);
+        // Count RC lookups this month
+        const allRecords = await storage.getRcRecordsByAgency(agencyCode);
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+        const thisMonthCount = allRecords.filter(r => new Date(r.createdAt!) >= startOfMonth).length;
 
-        if (thisYearCount >= rcLimit) {
+        if (thisMonthCount >= rcLimit) {
           return res.status(403).json({
             success: false,
-            message: `RC lookup limit reached. Your ${plan} plan allows ${rcLimit} lookups/year. Used: ${thisYearCount}/${rcLimit}.`,
-            used: thisYearCount,
+            message: `RC lookup limit reached. Your ${plan} plan allows ${rcLimit} lookups/month. Used: ${thisMonthCount}/${rcLimit}. Upgrade to get more lookups.`,
+            used: thisMonthCount,
             limit: rcLimit,
             plan,
           });
@@ -1913,14 +1933,34 @@ Return ONLY valid JSON, no markdown, no explanation.`
 
       let { resp: apiResponse, data: apiData } = await rcCallApi(primaryUrl);
 
+      // Auto-fallback to RCV2 when primary returns backend_down
       if (!apiData?.success && (apiData?.message_code === "backend_down" || apiData?.message === "Backend Down.")) {
         console.log(`RC primary backend_down for ${cleanRC}, retrying with RCV2`);
         ({ resp: apiResponse, data: apiData } = await rcCallApi(rcv2Url));
       }
 
-      if (!apiResponse.ok || !apiData?.success || !apiData?.data) {
+      if (!apiResponse.ok || !apiData?.success) {
+        const status = apiData?.status_code || apiResponse.status;
+        const msgCode = apiData?.message_code;
+        const apiMsg = apiData?.message;
         console.error("RC API error:", apiResponse.status, JSON.stringify(apiData));
-        return res.status(apiResponse.status || 500).json({ success: false, message: apiData?.message || "RC API request failed. Please try again." });
+
+        let userMessage: string;
+        if (status === 422 || msgCode === "verification_failed" || apiMsg === "Verification Failed.") {
+          userMessage = "Invalid or unregistered RC number. Please check the number and try again.";
+        } else if (status === 500 && (msgCode === "backend_down" || apiMsg === "Backend Down.")) {
+          userMessage = "RC lookup service is temporarily unavailable. Please try again in a few minutes.";
+        } else if (status === 401 || status === 403) {
+          userMessage = "RC lookup API authentication failed. Please contact administrator.";
+        } else {
+          userMessage = apiMsg || "RC API request failed. Please try again.";
+        }
+
+        return res.status(status >= 400 && status < 600 ? status : 500).json({ success: false, message: userMessage });
+      }
+
+      if (!apiData.data) {
+        return res.status(400).json({ success: false, message: "Vehicle not found or invalid RC number." });
       }
 
       const raw = apiData.data;
@@ -1961,21 +2001,66 @@ Return ONLY valid JSON, no markdown, no explanation.`
     }
   });
 
-  // GET /api/rc-lookup — MASTER_ADMIN view all RC records across agencies
+  // GET /api/rc-lookup — MASTER_ADMIN view all RC records across agencies + APLM CRM
   app.get("/api/rc-lookup", authMiddleware, roleMiddleware("MASTER_ADMIN"), async (req: AuthRequest, res: Response) => {
     try {
       const agencyFilter = req.query.agency as string | undefined;
-      let records: any[];
-      if (agencyFilter) {
-        records = await storage.getRcRecordsByAgency(agencyFilter);
-      } else {
-        records = await storage.getAllRcRecords();
+      const platformFilter = req.query.platform as string | undefined; // "ica" | "aplm" | undefined = all
+
+      let records: any[] = [];
+
+      // ── ICA CRM records ──────────────────────────────────────────────
+      if (!platformFilter || platformFilter === "ica") {
+        const ownRecords = agencyFilter
+          ? await storage.getRcRecordsByAgency(agencyFilter)
+          : await storage.getAllRcRecords();
+        const allAgencies = await storage.getAllAgencies();
+        const agencyMap: Record<string, string> = {};
+        for (const a of allAgencies) { agencyMap[a.agencyCode] = a.name; }
+        records.push(...ownRecords.map((r: any) => ({
+          ...r,
+          agencyName: agencyMap[r.agencyCode] || r.agencyCode,
+          platform: "ICA CRM",
+        })));
       }
-      const allAgencies = await storage.getAllAgencies();
-      const agencyMap: Record<string, string> = {};
-      for (const a of allAgencies) { agencyMap[a.agencyCode] = a.name; }
-      const enriched = records.map((r: any) => ({ ...r, agencyName: agencyMap[r.agencyCode] || r.agencyCode }));
-      return res.json({ success: true, data: enriched });
+
+      // ── APLM CRM records (cross-DB) ──────────────────────────────────
+      if (!platformFilter || platformFilter === "aplm") {
+        try {
+          const crossDb = process.env.CROSS_DB_URL;
+          const client = new Client({ connectionString: crossDb });
+          await client.connect();
+
+          const rQuery = agencyFilter
+            ? "SELECT id, agency_code, rc_number, rc_data, looked_up_by, created_at FROM rc_records WHERE agency_code = $1 ORDER BY created_at DESC"
+            : "SELECT id, agency_code, rc_number, rc_data, looked_up_by, created_at FROM rc_records ORDER BY created_at DESC";
+          const rResult = await client.query(rQuery, agencyFilter ? [agencyFilter] : []);
+
+          const aResult = await client.query("SELECT agency_code, name FROM agencies");
+          await client.end();
+
+          const aplmAgencyMap: Record<string, string> = {};
+          for (const a of aResult.rows) { aplmAgencyMap[a.agency_code] = a.name; }
+
+          records.push(...rResult.rows.map((r: any) => ({
+            id: r.id,
+            agencyCode: r.agency_code,
+            rcNumber: r.rc_number,
+            rcData: r.rc_data,
+            lookedUpBy: r.looked_up_by,
+            createdAt: r.created_at,
+            agencyName: aplmAgencyMap[r.agency_code] || r.agency_code,
+            platform: "APLM CRM",
+          })));
+        } catch (crossErr) {
+          console.error("[rc-lookup-cross-db]", crossErr);
+        }
+      }
+
+      // Sort newest first
+      records.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      return res.json({ success: true, data: records });
     } catch (error: any) {
       console.error(error);
       res.status(500).json({ success: false, message: "Internal server error" });
@@ -1985,7 +2070,7 @@ Return ONLY valid JSON, no markdown, no explanation.`
   // DELETE /api/rc-lookup/:id — MASTER_ADMIN delete RC record
   app.delete("/api/rc-lookup/:id", authMiddleware, roleMiddleware("MASTER_ADMIN"), async (req: AuthRequest, res: Response) => {
     try {
-      await storage.deleteRcRecord(req.params.id);
+      await storage.deleteRcRecord(req.params.id as string);
       res.json({ success: true, message: "RC record deleted" });
     } catch (error: any) {
       console.error(error);
@@ -2003,12 +2088,13 @@ Return ONLY valid JSON, no markdown, no explanation.`
       const agencyCode = req.user!.agencyCode!;
       const records = await storage.getRcRecordsByAgency(agencyCode);
 
-      // Calculate this year's usage via direct DB count (not limited to 50)
+      // Calculate this month's usage
       const agency = await storage.getAgencyByCode(agencyCode);
       const plan = agency?.plan as string || "BASIC";
       const limit = RC_LOOKUP_LIMITS[plan] ?? 0;
-      const yearStart = new Date(new Date().getFullYear(), 0, 1);
-      const used = await storage.countRcRecordsByAgencySince(agencyCode, yearStart);
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const used = records.filter(r => new Date(r.createdAt!) >= monthStart).length;
 
       res.json({
         success: true,
@@ -2094,16 +2180,18 @@ Return ONLY valid JSON, no markdown, no explanation.`
     }
   });
 
-  // GET /api/addons/balance?agencyCode=xxx
+  // GET /api/addons/balance?agencyCode=xxx — public (used by icaweb.in)
   app.get("/api/addons/balance", async (req: Request, res: Response) => {
     try {
       const { agencyCode } = req.query;
-      if (!agencyCode) return res.status(400).json({ success: false, message: "agencyCode required" });
-      const agency = await storage.getAgencyByCode(agencyCode as string);
+      if (!agencyCode || typeof agencyCode !== "string" || !/^[A-Z0-9]{3,20}$/.test(agencyCode.toUpperCase())) {
+        return res.status(400).json({ success: false, message: "Invalid agencyCode" });
+      }
+      const agency = await storage.getAgencyByCode(agencyCode.toUpperCase());
       if (!agency) return res.status(404).json({ success: false, message: "Agency not found" });
       res.json({ success: true, data: { rcAddonCredits: (agency as any).rcAddonCredits || 0, aiAddonCredits: (agency as any).aiAddonCredits || 0 } });
-    } catch (error: any) {
-      res.status(500).json({ success: false, message: error.message });
+    } catch {
+      res.status(500).json({ success: false, message: "Internal server error" });
     }
   });
 
@@ -2111,7 +2199,8 @@ Return ONLY valid JSON, no markdown, no explanation.`
   app.post("/api/addons/webhook", express.raw({ type: "application/json" }), async (req: Request, res: Response) => {
     try {
       const signature = req.headers["x-razorpay-signature"] as string;
-      const addonSecret = process.env.ADDON_WEBHOOK_SECRET || process.env.RAZORPAY_KEY_SECRET!;
+      const addonSecret = process.env.ADDON_WEBHOOK_SECRET!;
+      if (!addonSecret) { console.error("ADDON_WEBHOOK_SECRET not set"); return res.status(500).json({ success: false }); }
       const expectedSig = crypto.createHmac("sha256", addonSecret).update(req.body).digest("hex");
       if (expectedSig !== signature) return res.status(400).json({ success: false });
       const event = JSON.parse(req.body.toString());
@@ -2377,6 +2466,13 @@ ${businessContext4 ? `About this agency:\n${businessContext4}\n` : ""}${crmConte
       const { name, phone, email, interest, message } = req.body;
       if (!name || !phone) return res.status(400).json({ success: false, message: "Name and phone required" });
 
+      const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+      const safeName = esc(String(name));
+      const safePhone = esc(String(phone));
+      const safeEmail = email ? esc(String(email)) : "—";
+      const safeInterest = interest ? esc(String(interest)) : "—";
+      const safeMessage = message ? esc(String(message)) : "—";
+
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#f9f9f9;border-radius:12px;">
           <div style="background:#0d1b4b;padding:20px 24px;border-radius:8px 8px 0 0;">
@@ -2385,11 +2481,11 @@ ${businessContext4 ? `About this agency:\n${businessContext4}\n` : ""}${crmConte
           </div>
           <div style="background:#ffffff;padding:24px;border-radius:0 0 8px 8px;border:1px solid #e5e5e5;border-top:none;">
             <table style="width:100%;border-collapse:collapse;">
-              <tr><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;color:#666;font-size:13px;width:120px;">Name</td><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-weight:600;font-size:14px;">${name}</td></tr>
-              <tr><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;color:#666;font-size:13px;">Phone</td><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-weight:600;font-size:14px;"><a href="tel:${phone}" style="color:#0d1b4b;">${phone}</a></td></tr>
-              <tr><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;color:#666;font-size:13px;">Email</td><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;">${email || "—"}</td></tr>
-              <tr><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;color:#666;font-size:13px;">Interest</td><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;"><span style="background:#e8f5e9;color:#2e7d32;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;">${interest || "—"}</span></td></tr>
-              <tr><td style="padding:10px 0;color:#666;font-size:13px;">Message</td><td style="padding:10px 0;font-size:14px;color:#333;">${message || "—"}</td></tr>
+              <tr><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;color:#666;font-size:13px;width:120px;">Name</td><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-weight:600;font-size:14px;">${safeName}</td></tr>
+              <tr><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;color:#666;font-size:13px;">Phone</td><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-weight:600;font-size:14px;"><a href="tel:${safePhone}" style="color:#0d1b4b;">${safePhone}</a></td></tr>
+              <tr><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;color:#666;font-size:13px;">Email</td><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;">${safeEmail}</td></tr>
+              <tr><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;color:#666;font-size:13px;">Interest</td><td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;"><span style="background:#e8f5e9;color:#2e7d32;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;">${safeInterest}</span></td></tr>
+              <tr><td style="padding:10px 0;color:#666;font-size:13px;">Message</td><td style="padding:10px 0;font-size:14px;color:#333;">${safeMessage}</td></tr>
             </table>
             <div style="margin-top:20px;padding:12px 16px;background:#e8f5e9;border-radius:8px;font-size:13px;color:#2e7d32;">
               <strong>Quick Reply:</strong> <a href="WALINK" style="color:#2e7d32;">Reply on WhatsApp →</a>
@@ -2399,9 +2495,9 @@ ${businessContext4 ? `About this agency:\n${businessContext4}\n` : ""}${crmConte
         </div>`;
 
       const cleanPhone = phone.replace(/[^0-9]/g, '');
-      const waLink = `https://wa.me/91${cleanPhone}?text=Hi%20${name}%2C%20thanks%20for%20your%20interest%20in%20ICA%20CRM!`;
+      const waLink = `https://wa.me/91${cleanPhone}?text=Hi%20${encodeURIComponent(String(name))}%2C%20thanks%20for%20your%20interest%20in%20ICA%20CRM!`;
       const finalHtml = html.replace('WALINK', waLink);
-      const sent = await sendEmail("support@icaweb.in", `New Inquiry: ${name} — ${interest || "ICA Products"}`, finalHtml);
+      const sent = await sendEmail("support@icaweb.in", `New Inquiry: ${safeName} — ${safeInterest}`, finalHtml);
       console.log(`Contact form: ${name} ${phone} — email sent: ${sent}`);
       res.json({ success: true, message: "Inquiry received" });
     } catch (error: any) {
@@ -2633,29 +2729,53 @@ ${businessContext4 ? `About this agency:\n${businessContext4}\n` : ""}${crmConte
   });
 
   // POST /api/payments/website-renew — auto-activate after icaweb.in payment
+  // Secured: verifies payment is real and captured via Razorpay API before activating
   app.post("/api/payments/website-renew", async (req: Request, res: Response) => {
     try {
       const { agencyCode, plan, razorpay_payment_id, email, name } = req.body;
       if (!agencyCode || !plan || !razorpay_payment_id) {
         return res.status(400).json({ success: false, message: "Missing fields" });
       }
+      const planAmounts: Record<string, number> = { BASIC: 250000, PRO: 550000, ENTERPRISE: 1200000 };
+      const planUpper = plan.toUpperCase();
+      if (!planAmounts[planUpper]) {
+        return res.status(400).json({ success: false, message: "Invalid plan" });
+      }
+
+      // Verify payment with Razorpay — never trust client-provided payment IDs alone
+      let rzpPayment: any;
+      try {
+        rzpPayment = await razorpay.payments.fetch(razorpay_payment_id);
+      } catch {
+        return res.status(400).json({ success: false, message: "Payment not found" });
+      }
+      if (rzpPayment.status !== "captured") {
+        return res.status(400).json({ success: false, message: "Payment not captured" });
+      }
+      if (rzpPayment.amount !== planAmounts[planUpper] || rzpPayment.currency !== "INR") {
+        return res.status(400).json({ success: false, message: "Payment amount mismatch" });
+      }
+
+      // Idempotency: skip if this payment was already processed
+      const existing = await storage.getPaymentByOrderId(razorpay_payment_id);
+      if (existing && existing.status === "PAID") {
+        return res.status(409).json({ success: false, message: "Payment already processed" });
+      }
+
       const agency = await storage.getAgencyByCode(agencyCode.toUpperCase());
       if (!agency) return res.status(404).json({ success: false, message: "Agency not found" });
-      const limits = PLAN_LIMITS[plan] || {};
+      const limits = PLAN_LIMITS[planUpper] || {};
       const newExpiry = new Date();
       newExpiry.setDate(newExpiry.getDate() + 30);
       await storage.updateAgency(agency.id, {
-        plan, ...limits, planAssignedAt: new Date(),
+        plan: planUpper, ...limits, planAssignedAt: new Date(),
         isActive: true, subscriptionExpiry: newExpiry
       });
-      // Record payment in payments table
-      const planAmounts: Record<string, number> = { BASIC: 250000, PRO: 550000, ENTERPRISE: 1200000 };
-      const planUpper = plan.toUpperCase();
       await storage.createPayment({
         agencyCode: agencyCode.toUpperCase(),
-        razorpayOrderId: razorpay_payment_id,
+        razorpayOrderId: rzpPayment.order_id || razorpay_payment_id,
         razorpayPaymentId: razorpay_payment_id,
-        amount: planAmounts[planUpper] || 0,
+        amount: planAmounts[planUpper],
         currency: "INR",
         plan: planUpper,
         status: "PAID",
@@ -2668,14 +2788,14 @@ ${businessContext4 ? `About this agency:\n${businessContext4}\n` : ""}${crmConte
         const toEmail = adminUser?.email || email;
         const toName = adminUser?.fullName || name;
         if (toEmail) {
-          await sendPaymentSuccessEmail(toEmail, toName, planUpper, planAmounts[planUpper] / 100 || 0, razorpay_payment_id);
+          await sendPaymentSuccessEmail(toEmail, toName, planUpper, planAmounts[planUpper] / 100, razorpay_payment_id);
         }
       } catch (emailErr) { console.error("Renewal email failed:", emailErr); }
-      console.log(`[website-renew] Agency ${agencyCode} renewed on ${plan} until ${newExpiry}`);
+      console.log(`[website-renew] Agency ${agencyCode} renewed on ${planUpper} until ${newExpiry}`);
       res.json({ success: true, message: "Agency renewed successfully" });
     } catch (err: any) {
       console.error("website-renew error:", err);
-      res.status(500).json({ success: false, message: err.message });
+      res.status(500).json({ success: false, message: "Renewal failed" });
     }
   });
 
@@ -2824,6 +2944,7 @@ ${businessContext4 ? `About this agency:\n${businessContext4}\n` : ""}${crmConte
       const updateData: any = {
         subscriptionStatus: "ACTIVE",
         subscriptionExpiry: newExpiry,
+        isActive: true,
       };
       if (plan) updateData.plan = plan.toUpperCase();
 

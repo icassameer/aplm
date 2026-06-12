@@ -289,7 +289,7 @@ async function transcribeWithSarvam(
       const ffmpeg = spawn("ffmpeg", [
         "-i", inputPath,
         "-f", "segment",
-        "-segment_time", "30",   // 30s chunks — Sarvam API hard limit is 30s
+        "-segment_time", "25",   // 25s chunks — Sarvam hard limit is <30s, stay safe
         "-c:a", "libmp3lame",
         "-b:a", "128k",
         "-ar", "16000",
