@@ -28,8 +28,6 @@ app.use(
         defaultSrc: ["'self'"],
         scriptSrc: [
           "'self'",
-          "'unsafe-inline'",
-          "'unsafe-eval'",
           "https://checkout.razorpay.com",
           "https://cdn.razorpay.com",
           "https://static.cloudflareinsights.com",
@@ -243,6 +241,23 @@ app.use((req, res, next) => {
       }
 
       log(`Subscription cron done — ${agencyRows.length} agencies checked`, "cron");
+
+      // ── Renewal Leads Cron — CONVERTED → RENEWAL after 10 months ─────────────
+      try {
+        const tenMonthsAgo = new Date();
+        tenMonthsAgo.setMonth(tenMonthsAgo.getMonth() - 10);
+        const renewalResult = await db.execute(sql`
+          UPDATE leads
+          SET status = 'RENEWAL', updated_at = NOW()
+          WHERE status = 'CONVERTED'
+            AND converted_at IS NOT NULL
+            AND converted_at <= ${tenMonthsAgo.toISOString()}
+        `);
+        const count = (renewalResult as any).rowCount ?? 0;
+        if (count > 0) log(`Renewal cron: ${count} lead(s) moved CONVERTED → RENEWAL`, "cron");
+      } catch (renewErr) {
+        log(`Renewal cron error: ${renewErr}`, "cron");
+      }
 
       // ── Clean up old processing jobs (older than 7 days) ──────────────────
       try {

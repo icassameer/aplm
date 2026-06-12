@@ -22,6 +22,7 @@ const STATUS_COLORS: Record<string, string> = {
   FOLLOW_UP: "hsl(27, 87%, 45%)",
   CONVERTED: "hsl(142, 71%, 28%)",
   NOT_INTERESTED: "hsl(0, 84%, 35%)",
+  RENEWAL: "hsl(270, 70%, 45%)",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -30,6 +31,7 @@ const STATUS_LABELS: Record<string, string> = {
   FOLLOW_UP: "Follow Up",
   CONVERTED: "Converted",
   NOT_INTERESTED: "Not Interested",
+  RENEWAL: "Renewal",
 };
 
 const tooltipStyle = {
@@ -188,6 +190,7 @@ function AgencyAdminDashboard({ data }: { data: any }) {
     { name: "Follow Up", count: stats.FOLLOW_UP || 0, fill: STATUS_COLORS["FOLLOW_UP"] || "#888" },
     { name: "Converted", count: stats.CONVERTED || 0, fill: STATUS_COLORS["CONVERTED"] || "#888" },
     { name: "Not Interested", count: stats.NOT_INTERESTED || 0, fill: STATUS_COLORS["NOT_INTERESTED"] || "#888" },
+    { name: "Renewal", count: stats.RENEWAL || 0, fill: STATUS_COLORS["RENEWAL"] || "#888" },
   ];
 
   const perfData = data?.telecallerPerformances || [];
@@ -348,6 +351,7 @@ function TeamLeaderDashboard({ data }: { data: any }) {
     FOLLOW_UP: tc.FOLLOW_UP || 0,
     CONVERTED: tc.CONVERTED || 0,
     NOT_INTERESTED: tc.NOT_INTERESTED || 0,
+    RENEWAL: tc.RENEWAL || 0,
   }));
 
   return (
@@ -410,6 +414,7 @@ function TeamLeaderDashboard({ data }: { data: any }) {
                     <Bar dataKey="FOLLOW_UP" stackId="a" fill={STATUS_COLORS.FOLLOW_UP} name="Follow Up" />
                     <Bar dataKey="CONTACTED" stackId="a" fill={STATUS_COLORS.CONTACTED} name="Contacted" />
                     <Bar dataKey="NEW" stackId="a" fill={STATUS_COLORS.NEW} name="New" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="RENEWAL" stackId="a" fill={STATUS_COLORS.RENEWAL} name="Renewal" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

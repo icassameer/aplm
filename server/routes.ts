@@ -630,6 +630,11 @@ export async function registerRoutes(
         updateData.firstContactedAt = new Date();
       }
       const updated = await storage.updateLead(req.params.id as string, updateData);
+      // Stamp convertedAt when first moved to CONVERTED (used for 10-month renewal cron)
+      if (req.body.status === "CONVERTED" && oldStatus !== "CONVERTED") {
+        updateData.convertedAt = new Date();
+        await storage.updateLead(req.params.id as string, { convertedAt: new Date() });
+      }
       if (req.body.status === "CONVERTED" && oldStatus !== "CONVERTED" && lead.assignedTo) {
         try {
           const agency = await storage.getAgencyByCode(lead.agencyCode);

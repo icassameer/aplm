@@ -16,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Users,
   Phone, Plus, ChevronLeft, ChevronRight, Filter, Search,
   UserCheck, Clock, CheckCircle2, XCircle, AlertCircle,
-  Upload, Download, Briefcase, Check, MessageCircle, TrendingUp, IndianRupee,
+  Upload, Download, Briefcase, Check, MessageCircle, TrendingUp, IndianRupee, RefreshCw,
 } from "lucide-react";
 
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
@@ -25,6 +25,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: any }> 
   FOLLOW_UP: { label: "Follow Up", color: "bg-chart-5 text-white dark:text-white", icon: Clock },
   CONVERTED: { label: "Converted", color: "bg-chart-4 text-white dark:text-white", icon: CheckCircle2 },
   NOT_INTERESTED: { label: "Not Interested", color: "bg-destructive text-destructive-foreground", icon: XCircle },
+  RENEWAL: { label: "Renewal", color: "bg-purple-600 text-white dark:text-white", icon: RefreshCw },
 };
 
 export default function LeadsPage() {
@@ -63,7 +64,7 @@ export default function LeadsPage() {
   });
   const [uploadTeamLeaderId, setUploadTeamLeaderId] = useState("");
   const [editForm, setEditForm] = useState({
-    name: "", phone: "", email: "", status: "", remarks: "", followUpDate: "", service: ""
+    status: "", remarks: "", followUpDate: "", service: ""
   });
   const [assignTo, setAssignTo] = useState("");
   const [assignService, setAssignService] = useState("");
@@ -307,6 +308,7 @@ export default function LeadsPage() {
                 <SelectItem value="FOLLOW_UP">Follow Up</SelectItem>
                 <SelectItem value="CONVERTED">Converted</SelectItem>
                 <SelectItem value="NOT_INTERESTED">Not Interested</SelectItem>
+                <SelectItem value="RENEWAL">Renewal</SelectItem>
               </SelectContent>
             </Select>
           )}
@@ -582,7 +584,7 @@ export default function LeadsPage() {
                             )}
                             <a
                               href={`https://wa.me/91${lead.phone.replace(/\D/g, "")}?text=${encodeURIComponent(
-                                `Hello ${lead.name},\n\nWe are reaching out regarding your enquiry${lead.service ? ` for *${lead.service}*` : ""}.\n\nWe would love to assist you. Please let us know a convenient time to connect.\n\nRegards,\nAPLM Team\n+91 8830242124`)}`}
+                                `Hello ${lead.name},\n\nWe are reaching out regarding your enquiry${lead.service ? ` for *${lead.service}*` : ""}.\n\nWe would love to assist you. Please let us know a convenient time to connect.\n\nRegards,\nICA Team\n+91 9967969850`)}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-1 text-green-600 hover:text-green-700 font-medium transition-colors bg-green-50 dark:bg-green-950 px-2 py-0.5 rounded-full"
@@ -620,9 +622,6 @@ export default function LeadsPage() {
                             onClick={() => {
                               setSelectedLead(lead);
                               setEditForm({
-                                name: lead.name || "",
-                                phone: lead.phone || "",
-                                email: lead.email || "",
                                 status: lead.status,
                                 remarks: lead.remarks || "",
                                 followUpDate: lead.followUpDate ? new Date(lead.followUpDate).toISOString().split("T")[0] : "",
@@ -757,22 +756,6 @@ export default function LeadsPage() {
         <DialogContent className="overflow-y-auto max-h-[90vh]">
           <DialogHeader><DialogTitle>Update Lead: {selectedLead?.name}</DialogTitle></DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); if (editForm.status === "CONVERTED" && !editForm.service) { toast({ title: "Service Required", description: "Please select a service before marking lead as Converted.", variant: "destructive" }); return; } updateMutation.mutate(); }} className="space-y-4">
-            {user?.role !== "TELE_CALLER" && (
-              <div className="space-y-3 pb-3 border-b">
-                <div className="space-y-1">
-                  <Label>Name</Label>
-                  <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} placeholder="Lead name" required />
-                </div>
-                <div className="space-y-1">
-                  <Label>Mobile Number</Label>
-                  <Input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} placeholder="Phone number" required />
-                </div>
-                <div className="space-y-1">
-                  <Label>Email <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                  <Input value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} placeholder="Email address" type="email" />
-                </div>
-              </div>
-            )}
             <div className="space-y-2">
               <Label>Status</Label>
               <Select value={editForm.status} onValueChange={(v) => setEditForm({ ...editForm, status: v })}>
@@ -783,6 +766,7 @@ export default function LeadsPage() {
                       <SelectItem value="CONVERTED">Converted</SelectItem>
                       <SelectItem value="FOLLOW_UP">Follow Up</SelectItem>
                       <SelectItem value="NOT_INTERESTED">Not Interested</SelectItem>
+                      <SelectItem value="RENEWAL">Renewal</SelectItem>
                     </>
                   ) : (
                     <>
@@ -791,6 +775,7 @@ export default function LeadsPage() {
                       <SelectItem value="FOLLOW_UP">Follow Up</SelectItem>
                       <SelectItem value="CONVERTED">Converted</SelectItem>
                       <SelectItem value="NOT_INTERESTED">Not Interested</SelectItem>
+                      <SelectItem value="RENEWAL">Renewal</SelectItem>
                     </>
                   )}
                 </SelectContent>

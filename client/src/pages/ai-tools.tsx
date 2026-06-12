@@ -191,7 +191,7 @@ export default function AIToolsPage() {
   };
 
 
-  const statusOptions = ["NEW", "CONTACTED", "FOLLOW_UP", "CONVERTED", "NOT_INTERESTED"];
+  const statusOptions = ["NEW", "CONTACTED", "FOLLOW_UP", "CONVERTED", "NOT_INTERESTED", "RENEWAL"];
 
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
@@ -361,13 +361,13 @@ export default function AIToolsPage() {
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <p className="text-xs text-muted-foreground font-medium">Filter:</p>
-                    {["ALL","NEW","FOLLOW_UP","CONVERTED","NOT_INTERESTED"].map(s => (
+                    {["ALL","NEW","FOLLOW_UP","CONVERTED","NOT_INTERESTED","RENEWAL"].map(s => (
                       <button
                         key={s}
                         onClick={() => { setBulkStatusFilter(s); setBulkSelectedLeads([]); }}
                         className={`text-xs px-2 py-1 rounded-full border transition-colors ${bulkStatusFilter === s ? "bg-green-600 text-white border-green-600" : "bg-background text-muted-foreground hover:border-foreground"}`}
                       >
-                        {s === "ALL" ? "All" : s === "FOLLOW_UP" ? "Follow Up" : s === "NOT_INTERESTED" ? "Not Interested" : s.charAt(0) + s.slice(1).toLowerCase()}
+                        {s === "ALL" ? "All" : s === "FOLLOW_UP" ? "Follow Up" : s === "NOT_INTERESTED" ? "Not Interested" : s === "RENEWAL" ? "Renewal" : s.charAt(0) + s.slice(1).toLowerCase()}
                       </button>
                     ))}
                   </div>

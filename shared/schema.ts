@@ -5,7 +5,7 @@ import { z } from "zod";
 
 export const roleEnum = ["MASTER_ADMIN", "AGENCY_ADMIN", "TEAM_LEADER", "TELE_CALLER"] as const;
 export const planEnum = ["BASIC", "PRO", "ENTERPRISE"] as const;
-export const leadStatusEnum = ["NEW", "CONTACTED", "FOLLOW_UP", "CONVERTED", "NOT_INTERESTED"] as const;
+export const leadStatusEnum = ["NEW", "CONTACTED", "FOLLOW_UP", "CONVERTED", "NOT_INTERESTED", "RENEWAL"] as const;
 export const userStatusEnum = ["ACTIVE", "INACTIVE", "PENDING_APPROVAL"] as const;
 export const upgradeRequestStatusEnum = ["PENDING", "APPROVED", "DENIED"] as const;
 export const subscriptionStatusEnum = ["TRIAL", "ACTIVE", "EXPIRED", "SUSPENDED"] as const;
@@ -76,6 +76,7 @@ export const leads = pgTable("leads", {
   assignedTo: text("assigned_to"),
   followUpDate: timestamp("follow_up_date"),
   firstContactedAt: timestamp("first_contacted_at"),
+  convertedAt: timestamp("converted_at"),
   remarks: text("remarks"),
   createdBy: text("created_by"),
   teamLeaderId: text("team_leader_id"),  // Set when TL assigns lead
