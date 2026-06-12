@@ -31,6 +31,10 @@ export default function RCLookupPage() {
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [agencyFilter, setAgencyFilter] = useState("all");
+  const [platformFilter, setPlatformFilter] = useState("all");
+  const now = new Date();
+  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [addLeadOpen, setAddLeadOpen] = useState(false);
   const [leadForm, setLeadForm] = useState({ name: "", phone: "", remarks: "", teamLeaderId: "" });
@@ -44,9 +48,14 @@ export default function RCLookupPage() {
 
   const agencyList = agencies?.data || [];
 
-  const recordsUrl = isMasterAdmin
-    ? agencyFilter !== "all" ? `/api/rc-lookup?agency=${agencyFilter}` : "/api/rc-lookup"
-    : "/api/rc-records";
+  const recordsUrl = (() => {
+    if (!isMasterAdmin) return `/api/rc-records?month=${selectedMonth}`;
+    const params = new URLSearchParams();
+    if (agencyFilter !== "all") params.set("agency", agencyFilter);
+    if (platformFilter !== "all") params.set("platform", platformFilter);
+    const qs = params.toString();
+    return qs ? `/api/rc-lookup?${qs}` : "/api/rc-lookup";
+  })();
 
   const { data: savedRecords, isLoading: recordsLoading, isFetching: recordsFetching, error: recordsQueryError } = useQuery({
     queryKey: [recordsUrl],
@@ -94,7 +103,7 @@ const subscriptionLoaded = !isMasterAdmin ? (!recordsLoading && !recordsFetching
       const data = await res.json();
       if (data.success) {
         setResult(data.data);
-        queryClient.invalidateQueries({ queryKey: ["/api/rc-records"] });
+        queryClient.invalidateQueries({ queryKey: [`/api/rc-records?month=${selectedMonth}`] });
         toast({ title: "RC details fetched successfully!" });
       } else {
         toast({ title: "Lookup failed", description: data.message, variant: "destructive" });
@@ -188,6 +197,13 @@ const subscriptionLoaded = !isMasterAdmin ? (!recordsLoading && !recordsFetching
       setAddLeadLoading(false);
     }
   };
+  const availableMonths: string[] = savedRecords?.meta?.availableMonths || [defaultMonth];
+
+  const formatMonth = (ym: string) => {
+    const [y, m] = ym.split("-");
+    return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+  };
+
   const r = result;
   const records = (savedRecords?.data || []).sort((a: any, b: any) => {
     const now = Date.now();
@@ -198,12 +214,17 @@ const subscriptionLoaded = !isMasterAdmin ? (!recordsLoading && !recordsFetching
     if (dateB === null) return -1;
     const aExpired = dateA <= now;
     const bExpired = dateB <= now;
-    if (aExpired && bExpired) return dateB - dateA;
-    if (!aExpired && !bExpired) return dateA - dateB;
-    return aExpired ? -1 : 1;
+    // Expired vehicles first (most recently expired at top), future vehicles last (soonest to expire first)
+    if (aExpired && bExpired) return dateB - dateA; // both expired: most recent first
+    if (!aExpired && !bExpired) return dateA - dateB; // both future: soonest first
+    return aExpired ? -1 : 1; // expired before future
   });
 
   if (isMasterAdmin) {
+    // Build agency list dynamically from the fetched records (covers both ICA + APLM agencies)
+    const allAgenciesFromRecords: Record<string, string> = {};
+    records.forEach((r: any) => { if (r.agencyCode) allAgenciesFromRecords[r.agencyCode] = r.agencyName || r.agencyCode; });
+
     return (
       <div className="p-6 space-y-6 max-w-5xl mx-auto">
         <div className="flex items-center justify-between flex-wrap gap-3">
@@ -212,37 +233,58 @@ const subscriptionLoaded = !isMasterAdmin ? (!recordsLoading && !recordsFetching
               <Car className="w-6 h-6 text-primary" />
               RC Lookup — All Agencies
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">View and manage RC lookup history across all agencies</p>
+            <p className="text-sm text-muted-foreground mt-1">View RC lookup history across all agencies (ICA CRM + APLM CRM)</p>
           </div>
           <Badge variant="secondary" className="text-sm px-3 py-1">
             {records.length} record{records.length !== 1 ? "s" : ""}
           </Badge>
         </div>
-        <div className="flex items-center gap-3">
-          <Building2 className="w-4 h-4 text-muted-foreground" />
-          <Select value={agencyFilter} onValueChange={setAgencyFilter}>
-            <SelectTrigger className="w-64">
-              <SelectValue placeholder="Filter by agency" />
+
+        {/* Filters */}
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Platform filter */}
+          <Select value={platformFilter} onValueChange={(v) => { setPlatformFilter(v); setAgencyFilter("all"); }}>
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="All Platforms" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Agencies</SelectItem>
-              {agencyList.map((a: any) => (
-                <SelectItem key={a.agencyCode} value={a.agencyCode}>
-                  {a.name} ({a.agencyCode})
-                </SelectItem>
-              ))}
+              <SelectItem value="all">All Platforms</SelectItem>
+              <SelectItem value="ica">ICA CRM</SelectItem>
+              <SelectItem value="aplm">APLM CRM</SelectItem>
             </SelectContent>
           </Select>
-          {agencyFilter !== "all" && (
-            <Button variant="ghost" size="sm" onClick={() => setAgencyFilter("all")}>Clear</Button>
+
+          {/* Agency filter — built from records */}
+          <div className="flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-muted-foreground" />
+            <Select value={agencyFilter} onValueChange={setAgencyFilter}>
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder="All Agencies" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Agencies</SelectItem>
+                {Object.entries(allAgenciesFromRecords).sort((a, b) => a[1].localeCompare(b[1])).map(([code, name]) => (
+                  <SelectItem key={code} value={code}>{name} ({code})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {(agencyFilter !== "all" || platformFilter !== "all") && (
+            <Button variant="ghost" size="sm" onClick={() => { setAgencyFilter("all"); setPlatformFilter("all"); }}>
+              Clear Filters
+            </Button>
           )}
         </div>
+
         {recordsLoading ? (
           <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
         ) : records.length > 0 ? (
           <div className="space-y-2">
-            {records.map((record: any) => (
-              <Card key={record.id} className="hover:border-primary/30 transition-colors">
+            {records
+              .filter((r: any) => agencyFilter === "all" || r.agencyCode === agencyFilter)
+              .map((record: any) => (
+              <Card key={`${record.platform}-${record.id}`} className="hover:border-primary/30 transition-colors">
                 <CardContent className="py-3 px-4">
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -252,6 +294,9 @@ const subscriptionLoaded = !isMasterAdmin ? (!recordsLoading && !recordsFetching
                           <span className="font-mono font-bold text-primary">{record.rcNumber}</span>
                           <Badge variant="outline" className="text-xs">{record.rcData?.vehicle_details?.fuel_type || "—"}</Badge>
                           <Badge variant="secondary" className="text-xs">{record.agencyName || record.agencyCode}</Badge>
+                          <Badge className={`text-xs ${record.platform === "APLM CRM" ? "bg-purple-600 hover:bg-purple-700" : "bg-blue-600 hover:bg-blue-700"}`}>
+                            {record.platform}
+                          </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground truncate">
                           {record.rcData?.vehicle_details?.maker} {record.rcData?.vehicle_details?.model}
@@ -262,24 +307,24 @@ const subscriptionLoaded = !isMasterAdmin ? (!recordsLoading && !recordsFetching
                     <div className="flex items-center gap-3 shrink-0">
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Calendar className="w-3 h-3" />
-                        {record.rcData?.insurance_details?.insurance_valid_upto
-                          ? <>Ins. exp: {new Date(record.rcData.insurance_details.insurance_valid_upto).toLocaleDateString("en-IN")}</>
-                          : "No insurance data"}
+                        {new Date(record.createdAt).toLocaleDateString("en-IN")}
                       </div>
-                      {deleteConfirm === record.id ? (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-destructive font-medium">Delete?</span>
-                          <Button size="sm" variant="destructive" className="h-7 px-2 text-xs"
-                            onClick={() => deleteMutation.mutate(record.id)}
-                            disabled={deleteMutation.isPending}>Yes</Button>
-                          <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
-                            onClick={() => setDeleteConfirm(null)}>No</Button>
-                        </div>
-                      ) : (
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                          onClick={(e) => { e.stopPropagation(); setDeleteConfirm(record.id); }}>
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                      {record.platform === "ICA CRM" && (
+                        deleteConfirm === record.id ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-destructive font-medium">Delete?</span>
+                            <Button size="sm" variant="destructive" className="h-7 px-2 text-xs"
+                              onClick={() => deleteMutation.mutate(record.id)}
+                              disabled={deleteMutation.isPending}>Yes</Button>
+                            <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                              onClick={() => setDeleteConfirm(null)}>No</Button>
+                          </div>
+                        ) : (
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                            onClick={(e) => { e.stopPropagation(); setDeleteConfirm(record.id); }}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )
                       )}
                     </div>
                   </div>
@@ -291,7 +336,7 @@ const subscriptionLoaded = !isMasterAdmin ? (!recordsLoading && !recordsFetching
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
               <Car className="w-10 h-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">No RC lookup records found{agencyFilter !== "all" ? " for this agency" : ""}.</p>
+              <p className="text-sm">No RC lookup records found.</p>
             </CardContent>
           </Card>
         )}
@@ -334,7 +379,7 @@ const subscriptionLoaded = !isMasterAdmin ? (!recordsLoading && !recordsFetching
               <p className="text-xs text-muted-foreground">⚠️ Each lookup uses API credits. Results are saved automatically.</p>
               {savedRecords?.meta && (
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="text-muted-foreground">This year:</span>
+                  <span className="text-muted-foreground">This month:</span>
                   <Badge variant={savedRecords.meta.used >= savedRecords.meta.limit ? "destructive" : "secondary"} className="text-xs">
                     {savedRecords.meta.used} / {savedRecords.meta.limit >= 9999999 ? "∞" : savedRecords.meta.limit} used
                   </Badge>
@@ -371,8 +416,8 @@ We can help you renew it quickly at the best rates.
 ✅ All insurance types covered
 
 Regards,
-Team APLM
-+91 8830242124`)}`} target="_blank" rel="noopener noreferrer">
+Team ICA
++91 9967969850`)}`} target="_blank" rel="noopener noreferrer">
                     <Button size="sm" variant="outline" className="gap-1 text-green-600 border-green-600 hover:bg-green-50">
                       <MessageCircle className="w-3 h-3" /> WhatsApp
                     </Button>
@@ -451,9 +496,21 @@ Team APLM
         </div>
       )}
       <div>
-        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-          <Clock className="w-5 h-5 text-muted-foreground" /> Previously Looked Up
-        </h2>
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Clock className="w-5 h-5 text-muted-foreground" /> Previously Looked Up
+          </h2>
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {availableMonths.map((m) => (
+                <SelectItem key={m} value={m}>{formatMonth(m)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         {recordsLoading ? (
           <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-16 w-full" />)}</div>
         ) : records.length > 0 ? (

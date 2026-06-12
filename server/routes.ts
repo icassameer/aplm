@@ -2086,20 +2086,37 @@ Return ONLY valid JSON, no markdown, no explanation.`
         return res.status(403).json({ success: false, message: "RC Lookup requires PRO or ENTERPRISE plan" });
       }
       const agencyCode = req.user!.agencyCode!;
-      const records = await storage.getRcRecordsByAgency(agencyCode);
 
-      // Calculate this month's usage
-      const agency = await storage.getAgencyByCode(agencyCode);
+      // Default to current month if no month param provided
+      const now = new Date();
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      const month = (req.query.month as string) || currentMonth;
+
+      const [records, availableMonths, agency] = await Promise.all([
+        storage.getRcRecordsByAgency(agencyCode, month),
+        storage.getRcAvailableMonths(agencyCode),
+        storage.getAgencyByCode(agencyCode),
+      ]);
+
       const plan = agency?.plan as string || "BASIC";
       const limit = RC_LOOKUP_LIMITS[plan] ?? 0;
-      const now = new Date();
+
+      // Usage = count for current calendar month (always current, regardless of selected month)
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const used = records.filter(r => new Date(r.createdAt!) >= monthStart).length;
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const currentMonthRecords = await storage.getRcRecordsByAgency(agencyCode, currentMonth);
+      const used = currentMonthRecords.length;
 
       res.json({
         success: true,
         data: records,
-        meta: { used, limit: limit === Infinity ? 9999999 : limit, plan },
+        meta: {
+          used,
+          limit: limit === Infinity ? 9999999 : limit,
+          plan,
+          selectedMonth: month,
+          availableMonths: availableMonths.length > 0 ? availableMonths : [currentMonth],
+        },
       });
     } catch (error: any) {
       res.status(500).json({ success: false, message: "Internal server error" });

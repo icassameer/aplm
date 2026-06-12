@@ -1,4 +1,4 @@
-import { eq, and, or, desc, asc, count, sql, ilike, isNull, isNotNull, lt, gt, gte, inArray } from "drizzle-orm";
+import { eq, and, or, desc, asc, count, sql, ilike, isNull, isNotNull, lt, gt, inArray } from "drizzle-orm";
 import { db } from "./db";
 import {
   agencies, users, leads, auditLogs, meetings, services, upgradeRequests, rcRecords, processingJobs, payments,
@@ -51,7 +51,7 @@ export interface IStorage {
   updateLead(id: string, data: Partial<Lead>): Promise<Lead | undefined>;
   deleteLead(id: string): Promise<void>;
   countLeadsByAgency(agencyCode: string): Promise<number>;
-  getLeadStats(agencyCode: string, assignedTo?: string): Promise<Record<string, number>>;
+  getLeadStats(agencyCode: string, assignedTo?: string, teamLeaderId?: string): Promise<Record<string, number>>;
 
   createAuditLog(log: Omit<AuditLog, "id" | "createdAt">): Promise<AuditLog>;
   getAuditLogs(agencyCode: string, page: number, limit: number, leadId?: string): Promise<{ logs: AuditLog[]; total: number }>;
@@ -77,8 +77,8 @@ export interface IStorage {
   getUpgradeRequest(id: string): Promise<UpgradeRequest | undefined>;
 
   createRcRecord(record: InsertRcRecord): Promise<RcRecord>;
-  getRcRecordsByAgency(agencyCode: string): Promise<RcRecord[]>;
-  countRcRecordsByAgencySince(agencyCode: string, since: Date): Promise<number>;
+  getRcRecordsByAgency(agencyCode: string, month?: string): Promise<RcRecord[]>;
+  getRcAvailableMonths(agencyCode: string): Promise<string[]>;
   getAllRcRecords(): Promise<RcRecord[]>;
   deleteRcRecord(id: string): Promise<void>;
   getRcRecordByNumber(agencyCode: string, rcNumber: string): Promise<RcRecord | undefined>;
@@ -324,9 +324,10 @@ export class DatabaseStorage implements IStorage {
     return result.count;
   }
 
-  async getLeadStats(agencyCode: string, assignedTo?: string): Promise<Record<string, number>> {
+  async getLeadStats(agencyCode: string, assignedTo?: string, teamLeaderId?: string): Promise<Record<string, number>> {
     const conditions = [eq(leads.agencyCode, agencyCode)];
     if (assignedTo) conditions.push(eq(leads.assignedTo, assignedTo));
+    if (teamLeaderId) conditions.push(eq(leads.teamLeaderId, teamLeaderId));
     const where = and(...conditions);
     const result = await db.select({ status: leads.status, count: count() }).from(leads).where(where).groupBy(leads.status);
     const stats: Record<string, number> = { NEW: 0, CONTACTED: 0, FOLLOW_UP: 0, CONVERTED: 0, NOT_INTERESTED: 0 };
@@ -626,14 +627,24 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async getRcRecordsByAgency(agencyCode: string): Promise<RcRecord[]> {
-    return db.select().from(rcRecords).where(eq(rcRecords.agencyCode, agencyCode)).orderBy(desc(rcRecords.createdAt)).limit(50);
+  async getRcRecordsByAgency(agencyCode: string, month?: string): Promise<RcRecord[]> {
+    if (month) {
+      // month = "YYYY-MM" — filter to that calendar month
+      const [year, mon] = month.split("-").map(Number);
+      const from = new Date(year, mon - 1, 1);
+      const to = new Date(year, mon, 1); // first day of next month (exclusive)
+      return db.select().from(rcRecords).where(
+        and(eq(rcRecords.agencyCode, agencyCode), sql`${rcRecords.createdAt} >= ${from} AND ${rcRecords.createdAt} < ${to}`)
+      ).orderBy(desc(rcRecords.createdAt));
+    }
+    return db.select().from(rcRecords).where(eq(rcRecords.agencyCode, agencyCode)).orderBy(desc(rcRecords.createdAt)).limit(200);
   }
 
-  async countRcRecordsByAgencySince(agencyCode: string, since: Date): Promise<number> {
-    const [result] = await db.select({ count: count() }).from(rcRecords)
-      .where(and(eq(rcRecords.agencyCode, agencyCode), gte(rcRecords.createdAt, since)));
-    return result.count;
+  async getRcAvailableMonths(agencyCode: string): Promise<string[]> {
+    const rows = await db.execute(
+      sql`SELECT DISTINCT TO_CHAR(created_at, 'YYYY-MM') AS month FROM rc_records WHERE agency_code = ${agencyCode} ORDER BY month DESC`
+    );
+    return (rows.rows as any[]).map((r) => r.month as string);
   }
 
   async getAllRcRecords(): Promise<RcRecord[]> {
