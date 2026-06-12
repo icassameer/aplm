@@ -199,9 +199,6 @@ const subscriptionLoaded = !isMasterAdmin ? (!recordsLoading && !recordsFetching
   };
   const availableMonths: string[] = savedRecords?.meta?.availableMonths || [defaultMonth];
 
-  // Once data loads, if current month has no records, jump to nearest available month
-  const effectiveMonth = availableMonths.includes(selectedMonth) ? selectedMonth : (availableMonths[0] || selectedMonth);
-
   const formatMonth = (ym: string) => {
     const [y, m] = ym.split("-");
     return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
@@ -501,11 +498,10 @@ Team ICA
       <div>
         <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
           <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Shield className="w-5 h-5 text-muted-foreground" /> Insurance Expiry — {formatMonth(effectiveMonth)}
+            <Clock className="w-5 h-5 text-muted-foreground" /> Previously Looked Up
           </h2>
-          <Select value={effectiveMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="w-52">
-              <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="w-44">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -536,21 +532,11 @@ Team ICA
                         </p>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                      {record.rcData?.insurance_details?.insurance_valid_upto ? (() => {
-                        const exp = new Date(record.rcData.insurance_details.insurance_valid_upto);
-                        const isExpired = exp < new Date();
-                        const daysLeft = Math.ceil((exp.getTime() - Date.now()) / 86400000);
-                        return (
-                          <Badge variant={isExpired ? "destructive" : daysLeft <= 30 ? "outline" : "secondary"} className={`text-xs gap-1 ${!isExpired && daysLeft <= 30 ? "border-amber-500 text-amber-600" : ""}`}>
-                            <Shield className="w-3 h-3" />
-                            {isExpired ? `Expired ${exp.toLocaleDateString("en-IN")}` : `Exp: ${exp.toLocaleDateString("en-IN")}`}
-                          </Badge>
-                        );
-                      })() : (
-                        <span className="text-xs text-muted-foreground">No insurance data</span>
-                      )}
-                      <span className="text-xs text-muted-foreground">Looked up: {new Date(record.createdAt).toLocaleDateString("en-IN")}</span>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Calendar className="w-3 h-3" />
+                      {record.rcData?.insurance_details?.insurance_valid_upto
+                        ? <>Ins. exp: {new Date(record.rcData.insurance_details.insurance_valid_upto).toLocaleDateString("en-IN")}</>
+                        : "No insurance data"}
                     </div>
                   </div>
                 </CardContent>

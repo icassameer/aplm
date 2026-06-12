@@ -2101,10 +2101,11 @@ Return ONLY valid JSON, no markdown, no explanation.`
       const plan = agency?.plan as string || "BASIC";
       const limit = RC_LOOKUP_LIMITS[plan] ?? 0;
 
-      // Usage = lookups done this calendar month (by createdAt, not insurance expiry)
+      // Usage = count for current calendar month (always current, regardless of selected month)
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const allRecords = await storage.getRcRecordsByAgency(agencyCode);
-      const used = allRecords.filter((r: any) => new Date(r.createdAt) >= monthStart).length;
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const currentMonthRecords = await storage.getRcRecordsByAgency(agencyCode, currentMonth);
+      const used = currentMonthRecords.length;
 
       res.json({
         success: true,
