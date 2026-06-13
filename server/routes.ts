@@ -607,6 +607,11 @@ export async function registerRoutes(
       if (req.user!.role === "TELE_CALLER" && lead.assignedTo !== req.user!.id) {
         return res.status(403).json({ success: false, message: "Not assigned to you" });
       }
+      // Tele callers cannot change lead name or phone number
+      if (req.user!.role === "TELE_CALLER") {
+        delete req.body.name;
+        delete req.body.phone;
+      }
 
       if (req.body.assignedTo !== undefined && req.user!.role !== "TEAM_LEADER") {
         return res.status(403).json({ success: false, message: "Only Team Leaders can assign leads" });

@@ -64,7 +64,7 @@ export default function LeadsPage() {
   });
   const [uploadTeamLeaderId, setUploadTeamLeaderId] = useState("");
   const [editForm, setEditForm] = useState({
-    status: "", remarks: "", followUpDate: "", service: ""
+    status: "", remarks: "", followUpDate: "", service: "", name: "", phone: ""
   });
   const [assignTo, setAssignTo] = useState("");
   const [assignService, setAssignService] = useState("");
@@ -626,6 +626,8 @@ export default function LeadsPage() {
                                 remarks: lead.remarks || "",
                                 followUpDate: lead.followUpDate ? new Date(lead.followUpDate).toISOString().split("T")[0] : "",
                                 service: lead.service || "",
+                                name: lead.name || "",
+                                phone: lead.phone || "",
                               });
                               setAiSuggestion("");
                               setEditOpen(true);
@@ -756,6 +758,18 @@ export default function LeadsPage() {
         <DialogContent className="overflow-y-auto max-h-[90vh]">
           <DialogHeader><DialogTitle>Update Lead: {selectedLead?.name}</DialogTitle></DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); if (editForm.status === "CONVERTED" && !editForm.service) { toast({ title: "Service Required", description: "Please select a service before marking lead as Converted.", variant: "destructive" }); return; } updateMutation.mutate(); }} className="space-y-4">
+            {(user?.role === "TEAM_LEADER" || user?.role === "AGENCY_ADMIN") && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Name</Label>
+                  <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} placeholder="Lead name" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone</Label>
+                  <Input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} placeholder="Phone number" />
+                </div>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Status</Label>
               <Select value={editForm.status} onValueChange={(v) => setEditForm({ ...editForm, status: v })}>
