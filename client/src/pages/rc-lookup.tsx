@@ -379,7 +379,7 @@ const subscriptionLoaded = !isMasterAdmin ? (!recordsLoading && !recordsFetching
               <p className="text-xs text-muted-foreground">⚠️ Each lookup uses API credits. Results are saved automatically.</p>
               {savedRecords?.meta && (
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="text-muted-foreground">This month:</span>
+                  <span className="text-muted-foreground">This year:</span>
                   <Badge variant={savedRecords.meta.used >= savedRecords.meta.limit ? "destructive" : "secondary"} className="text-xs">
                     {savedRecords.meta.used} / {savedRecords.meta.limit >= 9999999 ? "∞" : savedRecords.meta.limit} used
                   </Badge>

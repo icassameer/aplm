@@ -77,10 +77,11 @@ const AI_PROCEEDING_LIMITS: Record<string, number> = {
 };
 
 // RC Lookup monthly limits per plan
+// RC Lookup yearly limits per plan
 const RC_LOOKUP_LIMITS: Record<string, number> = {
-  BASIC: 0,        // No RC access
-  PRO: 50,         // 50 lookups per month
-  ENTERPRISE: 200, // 200 lookups per month
+  BASIC: 0,          // No RC access
+  PRO: 600,          // 600 lookups per year
+  ENTERPRISE: 1200,  // 1200 lookups per year
 };
 
 function generateToken(user: User & { sessionToken?: string | null }): string {
@@ -1870,18 +1871,15 @@ Return ONLY valid JSON, no markdown, no explanation.`
       const rcLimit = RC_LOOKUP_LIMITS[plan] ?? 0;
 
       if (rcLimit !== Infinity) {
-        // Count RC lookups this month
-        const allRecords = await storage.getRcRecordsByAgency(agencyCode);
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
-        const thisMonthCount = allRecords.filter(r => new Date(r.createdAt!) >= startOfMonth).length;
+        // Count RC lookups this year via direct DB count
+        const startOfYear = new Date(new Date().getFullYear(), 0, 1);
+        const thisYearCount = await storage.countRcRecordsByAgencySince(agencyCode, startOfYear);
 
-        if (thisMonthCount >= rcLimit) {
+        if (thisYearCount >= rcLimit) {
           return res.status(403).json({
             success: false,
-            message: `RC lookup limit reached. Your ${plan} plan allows ${rcLimit} lookups/month. Used: ${thisMonthCount}/${rcLimit}. Upgrade to get more lookups.`,
-            used: thisMonthCount,
+            message: `RC lookup limit reached. Your ${plan} plan allows ${rcLimit} lookups/year. Used: ${thisYearCount}/${rcLimit}.`,
+            used: thisYearCount,
             limit: rcLimit,
             plan,
           });
@@ -2113,11 +2111,9 @@ Return ONLY valid JSON, no markdown, no explanation.`
       const plan = agency?.plan as string || "BASIC";
       const limit = RC_LOOKUP_LIMITS[plan] ?? 0;
 
-      // Usage = count for current calendar month (always current, regardless of selected month)
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      const currentMonthRecords = await storage.getRcRecordsByAgency(agencyCode, currentMonth);
-      const used = currentMonthRecords.length;
+      // Usage = count for current calendar year via direct DB count
+      const yearStart = new Date(now.getFullYear(), 0, 1);
+      const used = await storage.countRcRecordsByAgencySince(agencyCode, yearStart);
 
       res.json({
         success: true,

@@ -79,6 +79,7 @@ export interface IStorage {
   createRcRecord(record: InsertRcRecord): Promise<RcRecord>;
   getRcRecordsByAgency(agencyCode: string, month?: string): Promise<RcRecord[]>;
   getRcAvailableMonths(agencyCode: string): Promise<string[]>;
+  countRcRecordsByAgencySince(agencyCode: string, since: Date): Promise<number>;
   getAllRcRecords(): Promise<RcRecord[]>;
   deleteRcRecord(id: string): Promise<void>;
   getRcRecordByNumber(agencyCode: string, rcNumber: string): Promise<RcRecord | undefined>;
@@ -638,6 +639,12 @@ export class DatabaseStorage implements IStorage {
       ).orderBy(desc(rcRecords.createdAt));
     }
     return db.select().from(rcRecords).where(eq(rcRecords.agencyCode, agencyCode)).orderBy(desc(rcRecords.createdAt)).limit(200);
+  }
+
+  async countRcRecordsByAgencySince(agencyCode: string, since: Date): Promise<number> {
+    const [result] = await db.select({ count: count() }).from(rcRecords)
+      .where(and(eq(rcRecords.agencyCode, agencyCode), gte(rcRecords.createdAt, since)));
+    return result.count;
   }
 
   async getRcAvailableMonths(agencyCode: string): Promise<string[]> {
