@@ -1,4 +1,4 @@
-import { eq, and, or, desc, asc, count, sql, ilike, isNull, isNotNull, lt, gt, inArray } from "drizzle-orm";
+import { eq, and, or, desc, asc, count, sql, ilike, isNull, isNotNull, lt, gt, gte, inArray } from "drizzle-orm";
 import { db } from "./db";
 import {
   agencies, users, leads, auditLogs, meetings, services, upgradeRequests, rcRecords, processingJobs, payments,
@@ -105,8 +105,8 @@ export interface IStorage {
   updateAttendance(id: string, data: Partial<Attendance>): Promise<Attendance | undefined>;
   // v9.4 — Commissions
   createCommission(data: InsertCommission): Promise<Commission>;
-  getCommissionsByUser(userId: string, agencyCode: string): Promise<Commission[]>;
-  getCommissionsByAgency(agencyCode: string): Promise<Commission[]>;
+  getCommissionsByUser(userId: string, agencyCode: string, startOfMonth?: Date): Promise<Commission[]>;
+  getCommissionsByAgency(agencyCode: string, startOfMonth?: Date): Promise<Commission[]>;
   updateCommission(id: string, data: Partial<Commission>): Promise<Commission | undefined>;
   // v9.4 — Service commission
   updateService(id: string, data: Partial<Service>): Promise<Service | undefined>;
@@ -753,14 +753,18 @@ export class DatabaseStorage implements IStorage {
     const [created] = await db.insert(commissions).values(data).returning();
     return created;
   }
-  async getCommissionsByUser(userId: string, agencyCode: string): Promise<any[]> {
+  async getCommissionsByUser(userId: string, agencyCode: string, startOfMonth?: Date): Promise<any[]> {
+    const conditions1 = [eq(commissions.userId, userId), eq(commissions.agencyCode, agencyCode)];
+    if (startOfMonth) conditions1.push(gte(commissions.convertedAt, startOfMonth));
     return db.select().from(commissions)
-      .where(and(eq(commissions.userId, userId), eq(commissions.agencyCode, agencyCode)))
+      .where(and(...conditions1))
       .orderBy(desc(commissions.convertedAt));
   }
-  async getCommissionsByAgency(agencyCode: string): Promise<any[]> {
+  async getCommissionsByAgency(agencyCode: string, startOfMonth?: Date): Promise<any[]> {
+    const conditions2 = [eq(commissions.agencyCode, agencyCode)];
+    if (startOfMonth) conditions2.push(gte(commissions.convertedAt, startOfMonth));
     const rows = await db.select().from(commissions)
-      .where(eq(commissions.agencyCode, agencyCode))
+      .where(and(...conditions2))
       .orderBy(desc(commissions.convertedAt));
     const userIds = [...new Set(rows.map((r: any) => r.userId))];
     if (userIds.length === 0) return rows;
@@ -774,9 +778,11 @@ export class DatabaseStorage implements IStorage {
       const tlRows = await db.select().from(users).where(inArray(users.id, tlIds));
       tlRows.forEach((u: any) => { tlMap[u.id] = u.fullName; });
     }
+    const convertedConditions = [eq(leads.agencyCode, agencyCode), eq(leads.status, "CONVERTED")];
+    if (startOfMonth) convertedConditions.push(gte(leads.convertedAt, startOfMonth));
     const convertedLeads = await db.select({ assignedTo: leads.assignedTo, cnt: count() })
       .from(leads)
-      .where(and(eq(leads.agencyCode, agencyCode), eq(leads.status, "CONVERTED")))
+      .where(and(...convertedConditions))
       .groupBy(leads.assignedTo);
     const convertedMap: Record<string, number> = {};
     convertedLeads.forEach((r: any) => { if (r.assignedTo) convertedMap[r.assignedTo] = Number(r.cnt); });

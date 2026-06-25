@@ -96,8 +96,8 @@ export default function LeadsPage() {
     queryFn: () => apiFetch("/api/stats/leads"),
   });
   const { data: commissionsData } = useQuery({
-    queryKey: ["/api/commissions"],
-    queryFn: () => apiFetch("/api/commissions"),
+    queryKey: ["/api/commissions", "current"],
+    queryFn: () => apiFetch("/api/commissions?month=current"),
     enabled: isAgencyAdmin,
   });
 

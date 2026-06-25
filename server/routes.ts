@@ -1051,9 +1051,11 @@ export async function registerRoutes(
       if (!agencyCode) return res.status(400).json({ success: false, message: "No agency" });
       let records;
       if (role === "TELE_CALLER") {
-        records = await storage.getCommissionsByUser(userId, agencyCode);
+        const som = req.query.month === 'current' ? new Date(new Date().getFullYear(), new Date().getMonth(), 1) : undefined;
+        records = await storage.getCommissionsByUser(userId, agencyCode, som);
       } else {
-        records = await storage.getCommissionsByAgency(agencyCode);
+        const som2 = req.query.month === 'current' ? new Date(new Date().getFullYear(), new Date().getMonth(), 1) : undefined;
+        records = await storage.getCommissionsByAgency(agencyCode, som2);
       }
       // Attach user names
       const agencyUsers = await storage.getUsersByAgency(agencyCode);
