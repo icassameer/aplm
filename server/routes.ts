@@ -2206,11 +2206,14 @@ Return ONLY valid JSON, no markdown, no explanation.`
   });
 
   // GET /api/addons/balance?agencyCode=xxx — public (used by icaweb.in)
-  app.get("/api/addons/balance", async (req: Request, res: Response) => {
+  app.get("/api/addons/balance", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const { agencyCode } = req.query;
-      if (!agencyCode || typeof agencyCode !== "string" || !/^[A-Z0-9]{3,20}$/.test(agencyCode.toUpperCase())) {
+      if (!agencyCode || typeof agencyCode !== "string" || !/^[A-Z0-9-]{3,20}$/.test(agencyCode.toUpperCase())) {
         return res.status(400).json({ success: false, message: "Invalid agencyCode" });
+      }
+      if (req.user!.role !== "MASTER_ADMIN" && req.user!.agencyCode !== agencyCode.toUpperCase()) {
+        return res.status(403).json({ success: false, message: "Access denied" });
       }
       const agency = await storage.getAgencyByCode(agencyCode.toUpperCase());
       if (!agency) return res.status(404).json({ success: false, message: "Agency not found" });

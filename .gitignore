@@ -39,3 +39,4 @@ replit.nix
 .config/
 .env.save*
 *.bak
+.deploy-backup
